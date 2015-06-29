@@ -779,7 +779,10 @@ class StaticTypeAnalyzer extends SimpleAstVisitor<Object> {
    */
   @override
   Object visitNullLiteral(NullLiteral node) {
-    _recordStaticType(node, _typeProvider.bottomType);
+    _recordStaticType(node, //[DEP30(A.2.1) TODO: cache eNNT.
+        _resolver.definingLibrary.context.analysisOptions.enableNonNullTypes ?
+            _resolver.typeProvider.nullType : //DEP30]
+              _typeProvider.bottomType);
     return null;
   }
 

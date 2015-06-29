@@ -330,7 +330,7 @@ class Utf8Decoder extends Converter<List<int>, String> {
    * If the [codeUnits] start with a leading [UNICODE_BOM_CHARACTER_RUNE] this
    * character is discarded.
    */
-  String convert(List<int> codeUnits, [int start = 0, int end]) {
+  @nullable String convert(List<int> codeUnits, [int start = 0, int end]) {
     // Allow the implementation to intercept and specialize based on the type
     // of codeUnits.
     String result = _convertIntercepted(_allowMalformed, codeUnits, start, end);

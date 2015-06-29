@@ -18,6 +18,7 @@ import 'scanner.dart';
 import 'source.dart' show LineInfo, Source;
 import 'utilities_collection.dart' show TokenMap;
 import 'utilities_dart.dart';
+part '../nullity/ast_part.dart'; //DEP30
 
 /**
  * Two or more string literals that are implicitly concatenated because of being
@@ -78,7 +79,7 @@ class AdjacentStrings extends StringLiteral {
  * An AST node that can be annotated with both a documentation comment and a
  * list of annotations.
  */
-abstract class AnnotatedNode extends AstNode {
+abstract class AnnotatedNode extends AstNode /*DEP30[*/ implements AstNodeWithMetadata /*]*/  {
   /**
    * The documentation comment associated with this node, or `null` if this node
    * does not have a documentation comment associated with it.
@@ -13685,7 +13686,7 @@ class NodeReplacer implements AstVisitor<bool> {
  * >   | [FieldFormalParameter]
  * >   | [SimpleFormalParameter]
  */
-abstract class NormalFormalParameter extends FormalParameter {
+abstract class NormalFormalParameter extends FormalParameter /*[DEP30*/ implements AstNodeWithMetadata /*]*/ {
   /**
    * The documentation comment associated with this parameter, or `null` if this
    * parameter does not have a documentation comment associated with it.

@@ -67,7 +67,7 @@ class Expect {
    * returned. Small strings can be compared visually, but for longer strings
    * only a slice containing the first difference will be shown.
    */
-  static String _stringDifference(String expected, String actual) {
+  static /*?*/String _stringDifference(String expected, String actual) { //DEP30
     if (expected.length < 20 && actual.length < 20) return null;
     for (int i = 0; i < expected.length && i < actual.length; i++) {
       if (expected.codeUnitAt(i) != actual.codeUnitAt(i)) {
@@ -90,7 +90,7 @@ class Expect {
   /**
    * Checks whether the expected and actual values are equal (using `==`).
    */
-  static void equals(var expected, var actual, [String reason = null]) {
+  static void equals(var expected, var actual, [String reason]) { //DEP30, was: reason = null
     if (expected == actual) return;
     String msg = _getMessage(reason);
     if (expected is String && actual is String) {
@@ -105,7 +105,7 @@ class Expect {
   /**
    * Checks whether the actual value is a bool and its value is true.
    */
-  static void isTrue(var actual, [String reason = null]) {
+  static void isTrue(var actual, [String reason]) { //DEP30, was: reason = null
     if (_identical(actual, true)) return;
     String msg = _getMessage(reason);
     _fail("Expect.isTrue($actual$msg) fails.");
@@ -114,7 +114,7 @@ class Expect {
   /**
    * Checks whether the actual value is a bool and its value is false.
    */
-  static void isFalse(var actual, [String reason = null]) {
+  static void isFalse(var actual, [String reason]) { //DEP30, was: reason = null
     if (_identical(actual, false)) return;
     String msg = _getMessage(reason);
     _fail("Expect.isFalse($actual$msg) fails.");
@@ -123,7 +123,7 @@ class Expect {
   /**
    * Checks whether [actual] is null.
    */
-  static void isNull(actual, [String reason = null]) {
+  static void isNull(actual, [String reason]) { //DEP30, was: reason = null
     if (null == actual) return;
     String msg = _getMessage(reason);
     _fail("Expect.isNull(actual: <$actual>$msg) fails.");
@@ -132,7 +132,7 @@ class Expect {
   /**
    * Checks whether [actual] is not null.
    */
-  static void isNotNull(actual, [String reason = null]) {
+  static void isNotNull(actual, [String reason]) { //DEP30, was: reason = null
     if (null != actual) return;
     String msg = _getMessage(reason);
     _fail("Expect.isNotNull(actual: <$actual>$msg) fails.");
@@ -142,7 +142,7 @@ class Expect {
    * Checks whether the expected and actual values are identical
    * (using `identical`).
    */
-  static void identical(var expected, var actual, [String reason = null]) {
+  static void identical(var expected, var actual, [String reason]) { //DEP30, was: reason = null
     if (_identical(expected, actual)) return;
     String msg = _getMessage(reason);
     _fail("Expect.identical(expected: <$expected>, actual: <$actual>$msg) "
@@ -161,8 +161,8 @@ class Expect {
    */
   static void approxEquals(num expected,
                            num actual,
-                           [num tolerance = null,
-                            String reason = null]) {
+                           [num tolerance,    //DEP30, was: = null
+                            String reason]) { //DEP30, was: = null
     if (tolerance == null) {
       tolerance = (expected / 1e4).abs();
     }
@@ -174,7 +174,7 @@ class Expect {
           'tolerance:<$tolerance>$msg) fails');
   }
 
-  static void notEquals(unexpected, actual, [String reason = null]) {
+  static void notEquals(unexpected, actual, [String reason]) { //DEP30, was: reason = null
     if (unexpected != actual) return;
     String msg = _getMessage(reason);
     _fail("Expect.notEquals(unexpected: <$unexpected>, actual:<$actual>$msg) "
@@ -187,7 +187,7 @@ class Expect {
    * used by the standard list implementation.  It should also produce nicer
    * error messages than just calling `Expect.equals(expected, actual)`.
    */
-  static void listEquals(List expected, List actual, [String reason = null]) {
+  static void listEquals(List expected, List actual, [String reason]) { //DEP30, was: reason = null
     String msg = _getMessage(reason);
     int n = (expected.length < actual.length) ? expected.length : actual.length;
     for (int i = 0; i < n; i++) {
@@ -211,7 +211,7 @@ class Expect {
    * the semantics of [Map.containsKey] to determine what "same" means. For
    * each key, checks that the values in both maps are equal using `==`.
    */
-  static void mapEquals(Map expected, Map actual, [String reason = null]) {
+  static void mapEquals(Map expected, Map actual, [String reason]) { //DEP30, was: reason = null
     String msg = _getMessage(reason);
 
     // Make sure all of the values are present in both and match.
@@ -237,7 +237,7 @@ class Expect {
    */
   static void stringEquals(String expected,
                            String actual,
-                           [String reason = null]) {
+                           [String reason]) { //DEP30, was: reason = null
     if (expected == actual) return;
 
     String msg = _getMessage(reason);
@@ -318,7 +318,7 @@ class Expect {
    */
   static void setEquals(Iterable expected,
                         Iterable actual,
-                        [String reason = null]) {
+                        [String reason]) { //DEP30, was: reason = null
     final missingSet = new Set.from(expected);
     missingSet.removeAll(actual);
     final extraSet = new Set.from(actual);
@@ -357,8 +357,8 @@ class Expect {
    *     Expect.throws(myThrowingFunction, (e) => e is MyException);
    */
   static void throws(void f(),
-                     [_CheckExceptionFn check = null,
-                      String reason = null]) {
+                     [_CheckExceptionFn check, //DEP30, was: = null
+                      String reason]) {        //DEP30, was: = null
     String msg = reason == null ? "" : "($reason)";
     if (f is! _Nullary) {
       // Only throws from executing the funtion body should count as throwing.
@@ -394,7 +394,7 @@ typedef _Nullary();  // Expect.throws argument must be this type.
 class ExpectException implements Exception {
   ExpectException(this.message);
   String toString() => message;
-  String message;
+  String message = ''; //DEP30
 }
 
 /// Annotation class for testing of dart2js. Use this as metadata on method

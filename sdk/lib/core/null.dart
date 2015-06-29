@@ -16,6 +16,9 @@ class Null {
     throw new UnsupportedError('class Null cannot be instantiated');
   }
 
+  bool operator ==(other) => identical(this, other); //DEP30-tmp(B.4.7) because Null is a root.
+  int get hashCode => 2011; // DEP30-tmp(B.4.7), matches value of _identityHashCode in null_patch.dart
+
   /** Returns the string `"null"`. */
   String toString() => "null";
 }

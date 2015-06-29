@@ -12,8 +12,8 @@ typedef bool _Predicate<T>(T value);
  */
 class _SplayTreeNode<K> {
   final K key;
-  _SplayTreeNode<K> left;
-  _SplayTreeNode<K> right;
+  @nullable _SplayTreeNode<K> left;
+  @nullable _SplayTreeNode<K> right;
 
   _SplayTreeNode(K this.key);
 }
@@ -39,11 +39,11 @@ class _SplayTreeMapNode<K, V> extends _SplayTreeNode<K> {
 abstract class _SplayTree<K> {
   // The root node of the splay tree. It will contain either the last
   // element inserted or the last element looked up.
-  _SplayTreeNode<K> _root;
+  @nullable _SplayTreeNode<K> _root;
 
   // The dummy node used when performing a splay on the tree. Reusing it
   // avoids allocating a node each time a splay is performed.
-  _SplayTreeNode<K> _dummy = new _SplayTreeNode<K>(null);
+  _SplayTreeNode<K> _dummy = new _SplayTreeNode</*?*/K>(null);
 
   // Number of elements in the splay tree.
   int _count = 0;
@@ -167,7 +167,7 @@ abstract class _SplayTree<K> {
     return current;
   }
 
-  _SplayTreeNode _remove(K key) {
+  @nullable _SplayTreeNode _remove(K key) {
     if (_root == null) return null;
     int comp = _splay(key);
     if (comp != 0) return null;
@@ -214,13 +214,13 @@ abstract class _SplayTree<K> {
     _root = node;
   }
 
-  _SplayTreeNode get _first {
+  @nullable _SplayTreeNode get _first {
     if (_root == null) return null;
     _root = _splayMin(_root);
     return _root;
   }
 
-  _SplayTreeNode get _last {
+  @nullable _SplayTreeNode get _last {
     if (_root == null) return null;
     _root = _splayMax(_root);
     return _root;
@@ -324,7 +324,7 @@ class SplayTreeMap<K, V> extends _SplayTree<K> implements Map<K, V> {
 
   SplayTreeMap._internal();
 
-  V operator [](Object key) {
+  @nullable V operator [](/*?*/Object key) {
     if (key == null) throw new ArgumentError(key);
     if (!_validKey(key)) return null;
     if (_root != null) {
@@ -337,7 +337,7 @@ class SplayTreeMap<K, V> extends _SplayTree<K> implements Map<K, V> {
     return null;
   }
 
-  V remove(Object key) {
+  @nullable V remove(/*?*/Object key) {
     if (!_validKey(key)) return null;
     _SplayTreeMapNode mapRoot = _remove(key);
     if (mapRoot != null) return mapRoot.value;
@@ -407,11 +407,11 @@ class SplayTreeMap<K, V> extends _SplayTree<K> implements Map<K, V> {
     _clear();
   }
 
-  bool containsKey(Object key) {
+  bool containsKey(/*?*/Object key) {
     return _validKey(key) && _splay(key) == 0;
   }
 
-  bool containsValue(Object value) {
+  bool containsValue(/*?*/Object value) {
     bool found = false;
     int initialSplayCount = _splayCount;
     bool visit(_SplayTreeMapNode node) {
@@ -439,7 +439,7 @@ class SplayTreeMap<K, V> extends _SplayTree<K> implements Map<K, V> {
   /**
    * Get the first key in the map. Returns [:null:] if the map is empty.
    */
-  K firstKey() {
+  @nullable K firstKey() {
     if (_root == null) return null;
     return _first.key;
   }
@@ -447,7 +447,7 @@ class SplayTreeMap<K, V> extends _SplayTree<K> implements Map<K, V> {
   /**
    * Get the last key in the map. Returns [:null:] if the map is empty.
    */
-  K lastKey() {
+  @nullable K lastKey() {
     if (_root == null) return null;
     return _last.key;
   }
@@ -456,7 +456,7 @@ class SplayTreeMap<K, V> extends _SplayTree<K> implements Map<K, V> {
    * Get the last key in the map that is strictly smaller than [key]. Returns
    * [:null:] if no key was not found.
    */
-  K lastKeyBefore(K key) {
+  @nullable K lastKeyBefore(K key) {
     if (key == null) throw new ArgumentError(key);
     if (_root == null) return null;
     int comp = _splay(key);
@@ -473,7 +473,7 @@ class SplayTreeMap<K, V> extends _SplayTree<K> implements Map<K, V> {
    * Get the first key in the map that is strictly larger than [key]. Returns
    * [:null:] if no key was not found.
    */
-  K firstKeyAfter(K key) {
+  @nullable K firstKeyAfter(K key) {
     if (key == null) throw new ArgumentError(key);
     if (_root == null) return null;
     int comp = _splay(key);
@@ -520,7 +520,7 @@ abstract class _SplayTreeIterator<T> implements Iterator<T> {
   int _splayCount;
 
   /** Current node. */
-  _SplayTreeNode _currentNode;
+  @nullable _SplayTreeNode _currentNode;
 
   _SplayTreeIterator(_SplayTree tree)
       : _tree = tree,
@@ -543,7 +543,7 @@ abstract class _SplayTreeIterator<T> implements Iterator<T> {
     }
   }
 
-  T get current {
+  @nullable T get current {
     if (_currentNode == null) return null;
     return _getValue(_currentNode);
   }
@@ -737,7 +737,7 @@ class SplayTreeSet<E> extends _SplayTree<E> with IterableMixin<E>, SetMixin<E> {
   }
 
   // From Set.
-  bool contains(Object object) {
+  bool contains(/*?*/Object object) {
     return _validKey(object) && _splay(object) == 0;
   }
 
@@ -748,7 +748,7 @@ class SplayTreeSet<E> extends _SplayTree<E> with IterableMixin<E>, SetMixin<E> {
     return true;
   }
 
-  bool remove(Object object) {
+  bool remove(/*?*/Object object) {
     if (!_validKey(object)) return false;
     return _remove(object) != null;
   }
@@ -762,17 +762,17 @@ class SplayTreeSet<E> extends _SplayTree<E> with IterableMixin<E>, SetMixin<E> {
     }
   }
 
-  void removeAll(Iterable<Object> elements) {
-    for (Object element in elements) {
+  void removeAll(Iterable</*?*/Object> elements) {
+    for (/*?*/Object element in elements) {
       if (_validKey(element)) _remove(element);
     }
   }
 
-  void retainAll(Iterable<Object> elements) {
+  void retainAll(Iterable</*?*/Object> elements) {
     // Build a set with the same sense of equality as this set.
     SplayTreeSet<E> retainSet = new SplayTreeSet<E>(_comparator, _validKey);
     int modificationCount = _modificationCount;
-    for (Object object in elements) {
+    for (/*?*/Object object in elements) {
       if (modificationCount != _modificationCount) {
         // The iterator should not have side effects.
         throw new ConcurrentModificationError(this);
@@ -788,7 +788,7 @@ class SplayTreeSet<E> extends _SplayTree<E> with IterableMixin<E>, SetMixin<E> {
     }
   }
 
-  E lookup(Object object) {
+  /*?*/E lookup(/*?*/Object object) {
     if (!_validKey(object)) return null;
     int comp = _splay(object);
     if (comp != 0) return null;
@@ -824,7 +824,7 @@ class SplayTreeSet<E> extends _SplayTree<E> with IterableMixin<E>, SetMixin<E> {
 
   // Copies the structure of a SplayTree into a new similar structure.
   // Works on _SplayTreeMapNode as well, but only copies the keys,
-  _SplayTreeNode<E> _copyNode(_SplayTreeNode<E> node) {
+  @nullable _SplayTreeNode<E> _copyNode(_SplayTreeNode<E> node) {
     if (node == null) return null;
     return new _SplayTreeNode<E>(node.key)..left = _copyNode(node.left)
                                           ..right = _copyNode(node.right);

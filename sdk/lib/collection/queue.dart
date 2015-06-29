@@ -97,8 +97,8 @@ abstract class Queue<E> implements Iterable<E>, EfficientLength {
 
 
 class _DoubleLink {
-  _DoubleLink _previousLink;
-  _DoubleLink _nextLink;
+  @nullable _DoubleLink _previousLink;
+  @nullable _DoubleLink _nextLink;
 
   void _link(_DoubleLink previous,
              _DoubleLink next) {
@@ -156,7 +156,7 @@ class DoubleLinkedQueueEntry<E> extends _DoubleLink {
  * or `prepend` can correctly update the element count.
  */
 abstract class _DoubleLinkedQueueEntry<E> extends _DoubleLink {
-  DoubleLinkedQueue<E> _queue;
+  @nullable DoubleLinkedQueue<E> _queue;
   _DoubleLinkedQueueEntry(this._queue);
 
   _DoubleLinkedQueueElement _asNonSentinelEntry();
@@ -236,7 +236,7 @@ class _DoubleLinkedQueueSentinel<E> extends _DoubleLinkedQueueEntry<E> {
     _nextLink = this;
   }
 
-  _DoubleLinkedQueueElement _asNonSentinelEntry() {
+  @nullable _DoubleLinkedQueueElement _asNonSentinelEntry() {
     return null;
   }
 
@@ -405,9 +405,9 @@ class DoubleLinkedQueue<E> extends Iterable<E> implements Queue<E> {
 }
 
 class _DoubleLinkedQueueIterator<E> implements Iterator<E> {
-  _DoubleLinkedQueueSentinel<E> _sentinel;
-  _DoubleLinkedQueueEntry<E> _nextEntry = null;
-  E _current;
+  @nullable _DoubleLinkedQueueSentinel<E> _sentinel;
+  @nullable _DoubleLinkedQueueEntry<E> _nextEntry = null;
+  @nullable E _current;
 
   _DoubleLinkedQueueIterator(_DoubleLinkedQueueSentinel<E> sentinel)
       : _sentinel = sentinel, _nextEntry = sentinel._nextLink;
@@ -442,7 +442,7 @@ class _DoubleLinkedQueueIterator<E> implements Iterator<E> {
  */
 class ListQueue<E> extends Iterable<E> implements Queue<E> {
   static const int _INITIAL_CAPACITY = 8;
-  List<E> _table;
+  List</*?*/E> _table;
   int _head;
   int _tail;
   int _modificationCount = 0;
@@ -796,7 +796,7 @@ class _ListQueueIterator<E> implements Iterator<E> {
   final int _end;
   final int _modificationCount;
   int _position;
-  E _current;
+  @nullable E _current;
 
   _ListQueueIterator(ListQueue queue)
       : _queue = queue,

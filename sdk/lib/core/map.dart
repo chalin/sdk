@@ -144,7 +144,7 @@ abstract class Map<K, V> {
    * Returns true if any of the values in the map are equal to `value`
    * according to the `==` operator.
    */
-  bool containsValue(Object value);
+  bool containsValue(/*?*/Object value);
 
   /**
    * Returns true if this map contains the given [key].
@@ -152,7 +152,7 @@ abstract class Map<K, V> {
    * Returns true if any of the keys in the map ar equal to `key`
    * according to the equality used by the map.
    */
-  bool containsKey(Object key);
+  bool containsKey(/*?*/Object key);
 
   /**
    * Returns the value for the given [key] or null if [key] is not in the map.
@@ -164,7 +164,7 @@ abstract class Map<K, V> {
    * Methods like [containsKey] or [putIfAbsent] can be use if the distinction
    * is important.
    */
-  V operator [](Object key);
+  V operator [](/*?*/Object key);
 
   /**
    * Associates the [key] with the given [value].
@@ -213,7 +213,7 @@ abstract class Map<K, V> {
    * Note that values can be `null` and a returned `null` value doesn't
    * always mean that the key was absent.
    */
-  V remove(Object key);
+  V remove(/*?*/Object key);
 
   /**
    * Removes all pairs from the map.

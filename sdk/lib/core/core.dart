@@ -193,3 +193,22 @@ part "string_sink.dart";
 part "symbol.dart";
 part "type.dart";
 part "uri.dart";
+//[DEP30(chalin) - can't seem to get 'part "nullity.dart";' to be accepted so I am embedding it here
+//
+// Copyright (c) 2015, the Dart project authors.  Please see the AUTHORS file
+// for details. All rights reserved. Use of this source code is governed by a
+// BSD-style license that can be found in the LICENSE file.
+
+// part of dart.core;
+
+/// Nullity annotations (DEP 30)
+
+class _NullableByDefault { const _NullableByDefault(); }
+class _Nullable { const _Nullable(); }
+class _NonNull { const _NonNull(); }
+
+const nullable_by_default = const _NullableByDefault();
+const nullable = const _Nullable();
+const non_null = const _NonNull();
+
+//DEP30]

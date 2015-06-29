@@ -34,7 +34,7 @@ class _LineSplitterSink extends StringConversionSinkBase {
 
   final StringConversionSink _sink;
 
-  String _carry;
+  @nullable String _carry;
 
   _LineSplitterSink(this._sink);
 
@@ -53,7 +53,7 @@ class _LineSplitterSink extends StringConversionSinkBase {
     addSlice('', 0, 0, true);
   }
 
-  static String _addSlice(String chunk, int start, int end, bool isLast,
+  static /*?*/String _addSlice(String chunk, int start, int end, bool isLast,
                           void adder(String val)) {
 
     int pos = start;

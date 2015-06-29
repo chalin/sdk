@@ -4608,6 +4608,16 @@ class StaticWarningCode extends ErrorCode {
       const StaticWarningCode('NON_ABSTRACT_CLASS_INHERITS_ABSTRACT_MEMBER_TWO',
           "Missing concrete implementation of {0} and {1}");
 
+  //[DEP30(B.3.4.c)
+  static const StaticWarningCode NON_NULL_VAR_NOT_INITIALIZED =
+      const StaticWarningCode('NON_NULL_VAR_NOT_INITIALIZED',
+          "The non-null variable '{0}' implicitly initialized with null");
+
+  static const StaticWarningCode NON_NULL_VAR_READ_BEFORE_WRITE =
+      const StaticWarningCode('NON_NULL_VAR_READ_BEFORE_WRITE',
+          "The non-null variable '{0}' is read before it has been assigned to on all paths");
+  //DEP30]
+
   /**
    * 13.11 Try: An on-catch clause of the form <i>on T catch (p<sub>1</sub>,
    * p<sub>2</sub>) s</i> or <i>on T s</i> matches an object <i>o</i> if the

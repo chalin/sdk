@@ -11,7 +11,7 @@ abstract class _HashSetBase<E> extends SetBase<E> {
   // It's possible to be more efficient if we have a way to create an empty
   // set of the correct type.
 
-  Set<E> difference(Set<Object> other) {
+  Set<E> difference(Set</*?*/Object> other) {
     Set<E> result = _newSet();
     for (var element in this) {
       if (!other.contains(element)) result.add(element);
@@ -19,7 +19,7 @@ abstract class _HashSetBase<E> extends SetBase<E> {
     return result;
   }
 
-  Set<E> intersection(Set<Object> other) {
+  Set<E> intersection(Set</*?*/Object> other) {
     Set<E> result = _newSet();
     for (var element in this) {
       if (other.contains(element)) result.add(element);

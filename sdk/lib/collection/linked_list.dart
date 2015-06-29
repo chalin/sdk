@@ -171,7 +171,7 @@ class _LinkedListIterator<E extends LinkedListEntry<E>>
     implements Iterator<E> {
   final LinkedList<E> _list;
   final int _modificationCount;
-  E _current;
+  @nullable E _current;
   _LinkedListLink _next;
 
   _LinkedListIterator(LinkedList<E> list)
@@ -218,9 +218,9 @@ class _LinkedListLink {
  */
 abstract class LinkedListEntry<E extends LinkedListEntry<E>>
     implements _LinkedListLink {
-  LinkedList<E> _list;
-  _LinkedListLink _next;
-  _LinkedListLink _previous;
+  @nullable LinkedList<E> _list;
+  @nullable _LinkedListLink _next;
+  @nullable _LinkedListLink _previous;
 
   /**
    * Get the linked list containing this element.
@@ -244,7 +244,7 @@ abstract class LinkedListEntry<E extends LinkedListEntry<E>>
    * Returns `null` if there is no successor in the linked list, or if this
    * entry is not currently in any list.
    */
-  E get next {
+  @nullable E get next {
     if (identical(_next, _list)) return null;
     E result = _next;
     return result;
@@ -256,7 +256,7 @@ abstract class LinkedListEntry<E extends LinkedListEntry<E>>
    * Returns `null` if there is no predecessor in the linked list, or if this
    * entry is not currently in any list.
    */
-  E get previous {
+  @nullable E get previous {
     if (identical(_previous, _list)) return null;
     return _previous as E;
   }

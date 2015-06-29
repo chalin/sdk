@@ -120,7 +120,7 @@ class _ForwardingStreamSubscription<S, T>
     extends _BufferingStreamSubscription<T> {
   final _ForwardingStream<S, T> _stream;
 
-  StreamSubscription<S> _subscription;
+  @nullable StreamSubscription<S> _subscription;
 
   _ForwardingStreamSubscription(this._stream, void onData(T data),
                                 Function onError, void onDone(),
@@ -157,7 +157,7 @@ class _ForwardingStreamSubscription<S, T>
     _subscription.resume();
   }
 
-  Future _onCancel() {
+  @nullable Future _onCancel() {
     if (_subscription != null) {
       StreamSubscription subscription = _subscription;
       _subscription = null;
@@ -460,7 +460,7 @@ typedef bool _Equality<T>(T a, T b);
 class _DistinctStream<T> extends _ForwardingStream<T, T> {
   static var _SENTINEL = new Object();
 
-  _Equality<T> _equals;
+  @nullable _Equality<T> _equals;
   var _previous = _SENTINEL;
 
   _DistinctStream(Stream<T> source, bool equals(T a, T b))

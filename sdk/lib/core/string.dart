@@ -144,7 +144,7 @@ abstract class String implements Comparable<String>, Pattern {
    *
    *     var isDeclared = const String.fromEnvironment("maybeDeclared") != null;
    */
-  external const factory String.fromEnvironment(String name,
+  external const factory /*?*/String.fromEnvironment(String name,
                                                 {String defaultValue});
 
   /**
@@ -207,7 +207,7 @@ abstract class String implements Comparable<String>, Pattern {
    * a single rune), whereas the second string encodes it as 'e' with the
    * combining accent character '◌́'.
    */
-  bool operator ==(Object other);
+  bool operator ==(/*?*/Object other);
 
   /**
    * Returns true if this string ends with [other]. For example:
@@ -487,7 +487,7 @@ abstract class String implements Comparable<String>, Pattern {
    * That is `0 <= start <= end <= this.length`.
    * If [end] is `null`, it defaults to [length].
    */
-  String replaceRange(int start, int end, String replacement);
+  String replaceRange(int start, /*?*/int end, String replacement);
 
   /**
    * Splits the string at matches of [pattern] and returns a list of substrings.
@@ -653,7 +653,7 @@ class RuneIterator implements BidirectionalIterator<int> {
    * If the iterator has hit either end, the [_currentCodePoint] is null
    * and [: _position == _nextPosition :].
    */
-  int _currentCodePoint;
+  @nullable int _currentCodePoint;
 
   /** Create an iterator positioned at the beginning of the string. */
   RuneIterator(String string)
@@ -689,7 +689,7 @@ class RuneIterator implements BidirectionalIterator<int> {
    *
    * Returns null if the [current] rune is null.
    */
-  int get rawIndex => (_position != _nextPosition) ? _position : null;
+  @nullable int get rawIndex => (_position != _nextPosition) ? _position : null;
 
   /**
    * Resets the iterator to the rune at the specified index of the string.
@@ -726,7 +726,7 @@ class RuneIterator implements BidirectionalIterator<int> {
   /** The rune (integer Unicode code point) starting at the current position in
    *  the string.
    */
-  int get current => _currentCodePoint;
+  @nullable int get current => _currentCodePoint;
 
   /**
    * The number of code units comprising the current rune.
@@ -743,7 +743,7 @@ class RuneIterator implements BidirectionalIterator<int> {
    *
    * Returns null if [current] is null.
    */
-  String get currentAsString {
+  @nullable String get currentAsString {
     if (_position == _nextPosition) return null;
     if (_position + 1 == _nextPosition) return string[_position];
     return string.substring(_position, _nextPosition);

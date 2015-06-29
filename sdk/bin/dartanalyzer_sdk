@@ -23,9 +23,9 @@ BIN_DIR="$(cd "${PROG_NAME%/*}" ; pwd -P)"
 SDK_DIR="$(cd "${BIN_DIR}/.." ; pwd -P)"
 
 SDK_ARG="--dart-sdk=$SDK_DIR"
-
+DEP_NNBD_ARG="-DDEP_NNBD=1" #DEP30; --enable-non-null --checked (line was blank)
 SNAPSHOT="$BIN_DIR/snapshots/dartanalyzer.dart.snapshot"
 
 # We are running the snapshot in the built SDK.
 DART="$BIN_DIR/dart"
-exec "$DART" "$SNAPSHOT" "$SDK_ARG" "$@"
+exec "$DART" "$DEP_NNBD_ARG" "$SNAPSHOT" "$SDK_ARG" "$@"

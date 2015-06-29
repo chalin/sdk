@@ -85,7 +85,7 @@ abstract class Set<E> extends Iterable<E> implements EfficientLength {
   /**
    * Returns true if [value] is in the set.
    */
-  bool contains(Object value);
+  bool contains(/*?*/Object value);
 
   /**
    * Adds [value] into the set. Returns `true` if [value] was added to the set.
@@ -107,7 +107,7 @@ abstract class Set<E> extends Iterable<E> implements EfficientLength {
    * in the set. Returns false otherwise. The method has no effect
    * if [value] value was not in the set.
    */
-  bool remove(Object value);
+  bool remove(/*?*/Object value);
 
   /**
    * If an object equal to [object] is in the set, return it.
@@ -115,12 +115,12 @@ abstract class Set<E> extends Iterable<E> implements EfficientLength {
    * Checks if there is an object in the set that is equal to [object].
    * If so, that object is returned, otherwise returns null.
    */
-  E lookup(Object object);
+  E lookup(/*?*/Object object);
 
   /**
    * Removes each element of [elements] from this set.
    */
-  void removeAll(Iterable<Object> elements);
+  void removeAll(Iterable</*?*/Object> elements);
 
   /**
    * Removes all elements of this set that are not elements in [elements].
@@ -130,7 +130,7 @@ abstract class Set<E> extends Iterable<E> implements EfficientLength {
    * equal element in this set is retained, and elements that are not equal
    * to any element in `elements` are removed.
    */
-  void retainAll(Iterable<Object> elements);
+  void retainAll(Iterable</*?*/Object> elements);
 
   /**
    * Removes all elements of this set that satisfy [test].
@@ -145,7 +145,7 @@ abstract class Set<E> extends Iterable<E> implements EfficientLength {
   /**
    * Returns whether this Set contains all the elements of [other].
    */
-  bool containsAll(Iterable<Object> other);
+  bool containsAll(Iterable</*?*/Object> other);
 
   /**
    * Returns a new set which is the intersection between this set and [other].
@@ -153,7 +153,7 @@ abstract class Set<E> extends Iterable<E> implements EfficientLength {
    * That is, the returned set contains all the elements of this [Set] that
    * are also elements of [other] according to `other.contains`.
    */
-  Set<E> intersection(Set<Object> other);
+  Set<E> intersection(Set</*?*/Object> other);
 
   /**
    * Returns a new set which contains all the elements of this set and [other].

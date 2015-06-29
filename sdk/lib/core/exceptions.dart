@@ -68,7 +68,7 @@ class FormatException implements Exception {
    *
    * May be omitted. If present, [source] should also be present if possible.
    */
-  final int offset;
+  final /*?*/int offset;
 
   /**
    * Creates a new FormatException with an optional error [message].

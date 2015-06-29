@@ -24,6 +24,9 @@ import 'sdk.dart' show DartSdk, SdkLibrary;
 import 'source.dart';
 import 'static_type_analyzer.dart';
 import 'utilities_dart.dart';
+part '../nullity/resolver_meta_type_annotation_part.dart'; //DEP30
+part '../nullity/resolver_core_part.dart'; //DEP30
+part '../nullity/error_verifier_non_null_local_var.dart'; //DEP30(B.3.4.c)
 
 /**
  * Callback signature used by ImplicitConstructorBuilder to register
@@ -976,7 +979,8 @@ class ConstantVerifier extends RecursiveAstVisitor<Object> {
             keys.add(keyResult);
           }
           DartType type = keyResult.type;
-          if (_implementsEqualsWhenNotAllowed(type)) {
+          if (_implementsEqualsWhenNotAllowed(type)/*DEP30-tmp(B.4.7)[*/
+              && (!isDEP30 || !type.isNull)/*]*/) {
             _errorReporter.reportErrorForNode(
                 CompileTimeErrorCode.CONST_MAP_KEY_EXPRESSION_TYPE_IMPLEMENTS_EQUALS,
                 key, [type.displayName]);
@@ -2619,6 +2623,11 @@ class ElementBuilder extends RecursiveAstVisitor<Object> {
     _setParameterVisibleRange(node, parameter);
     _currentHolder.addParameter(parameter);
     parameterName.staticElement = parameter;
+    //[DEP30(E.1.1)
+    if (isDEP30 && parameter is DefaultParameterElementImpl) {
+      parameter.createCalleeViewParamElement();
+    }
+    //DEP30]
     normalParameter.accept(this);
     holder.validate();
     return null;
@@ -6601,6 +6610,11 @@ class InheritanceManager {
     return unionMap;
   }
 
+  //[DEP30(B.2.8)
+  static ExecutableElement computeMergedExecutableElement(
+      List<ExecutableElement> elementArrayToMerge) =>
+          _computeMergedExecutableElement(elementArrayToMerge);
+  //DEP30 - btw, its Section 11.1.1 now.
   /**
    * Given some array of [ExecutableElement]s, this method creates a synthetic element as
    * described in 8.1.1:
@@ -6669,6 +6683,10 @@ class InheritanceManager {
           (elementArrayToMerge[0] as PropertyAccessorElement).isGetter;
       unionedPropertyAccessor.setter =
           (elementArrayToMerge[0] as PropertyAccessorElement).isSetter;
+      //[DEP30(B.2.8) - actually, this would seem to be a bug.
+      unionedPropertyAccessor.variable =
+          (elementArrayToMerge[0] as PropertyAccessorElement).variable;
+      //DEP30]
       unionedPropertyAccessor.inheritedElements = elementArrayToMerge;
       executable = unionedPropertyAccessor;
     }
@@ -7672,7 +7690,7 @@ class LibraryImportScope extends Scope {
  * Instances of the class `LibraryResolver` are used to resolve one or more mutually dependent
  * libraries within a single context.
  */
-class LibraryResolver {
+class LibraryResolver /*DEP30[*/ extends LibraryNullityResolverMixin /*]*/ {
   /**
    * The analysis context in which the libraries are being analyzed.
    */
@@ -7731,6 +7749,7 @@ class LibraryResolver {
         analysisContext.sourceFactory.forUri(DartSdk.DART_CORE);
     _asyncLibrarySource =
         analysisContext.sourceFactory.forUri(DartSdk.DART_ASYNC);
+    _enableNonNullTypes = analysisContext.analysisOptions.enableNonNullTypes; //DEP30
   }
 
   /**
@@ -7837,6 +7856,7 @@ class LibraryResolver {
     }
     _buildDirectiveModels();
     _typeProvider = new TypeProviderImpl(coreElement, asyncElement);
+    _processNullityAnnotations0(); //DEP30(B.4.6)
     _buildTypeHierarchies();
     //
     // Perform resolution and type analysis.
@@ -7854,6 +7874,7 @@ class LibraryResolver {
     //} else {
     //  resolveReferencesAndTypes(targetLibrary);
     //}
+    _verifyNonNullLocalVarReadBeforeWrite0(); //DEP30(B.3.4.c)
     _performConstantEvaluation();
     return targetLibrary.libraryElement;
   }
@@ -7916,6 +7937,7 @@ class LibraryResolver {
     _buildDirectiveModels();
     _typeProvider = new TypeProviderImpl(coreElement, asyncElement);
     _buildEnumMembers();
+    _processNullityAnnotations0(); //DEP30(B.4.6)
     _buildTypeHierarchies();
     _buildImplicitConstructors();
     //
@@ -7934,6 +7956,7 @@ class LibraryResolver {
     //} else {
     //  resolveReferencesAndTypes(targetLibrary);
     //}
+    _verifyNonNullLocalVarReadBeforeWrite0(); //DEP30(B.3.4.c)
     _performConstantEvaluation();
     return targetLibrary.libraryElement;
   }
@@ -10206,7 +10229,7 @@ class ResolverErrorCode extends ErrorCode {
  * Instances of the class `ResolverVisitor` are used to resolve the nodes within a single
  * compilation unit.
  */
-class ResolverVisitor extends ScopedVisitor {
+class ResolverVisitor extends ScopedVisitor /*DEP30[*/ with ResolverVisitorNullityMixin /*]*/{
   /**
    * The manager for the inheritance mappings.
    */
@@ -10633,10 +10656,13 @@ class ResolverVisitor extends ScopedVisitor {
       safelyVisit(leftOperand);
       if (rightOperand != null) {
         _overrideManager.enterScope();
+        _promoteManager.enterScope(); //DEP30(B.3.7)
         try {
           _propagateFalseState(leftOperand);
+          _safelyPromoteTypesFalseCond0(leftOperand, node); //DEP30(B.3.7)
           rightOperand.accept(this);
         } finally {
+          _promoteManager.exitScope(); //DEP30(B.3.7)
           _overrideManager.exitScope();
         }
       }
@@ -10816,10 +10842,13 @@ class ResolverVisitor extends ScopedVisitor {
     Expression elseExpression = node.elseExpression;
     if (elseExpression != null) {
       _overrideManager.enterScope();
+      _promoteManager.enterScope(); //DEP30(B.3.7)
       try {
         _propagateFalseState(condition);
+        _safelyPromoteTypesFalseCond0(condition, elseExpression); //DEP30(B.3.7)
         elseExpression.accept(this);
       } finally {
+        _promoteManager.exitScope(); //DEP30(B.3.7)
         _overrideManager.exitScope();
       }
     }
@@ -11142,10 +11171,13 @@ class ResolverVisitor extends ScopedVisitor {
     Statement elseStatement = node.elseStatement;
     if (elseStatement != null) {
       _overrideManager.enterScope();
+      _promoteManager.enterScope(); //DEP30(B.3.7)
       try {
         _propagateFalseState(condition);
+        _safelyPromoteTypesFalseCond0(condition, elseStatement); //DEP30(B.3.7)
         visitStatementInScope(elseStatement);
       } finally {
+        _promoteManager.exitScope(); //DEP30(B.3.7)
         elseOverrides = _overrideManager.captureLocalOverrides();
         _overrideManager.exitScope();
       }
@@ -11607,7 +11639,9 @@ class ResolverVisitor extends ScopedVisitor {
         return;
       }
       // Promoted type should be more specific than declared.
-      if (!potentialType.isMoreSpecificThan(type)) {
+      if (!potentialType.isMoreSpecificThan(type) /*[DEP30(B.3.7)*/
+          && (!isDEP30 || !potentialType.isNull)
+          /*DEP30]*/) {
         return;
       }
       // Do promote type of variable.
@@ -11626,8 +11660,16 @@ class ResolverVisitor extends ScopedVisitor {
         Expression right = binary.rightOperand;
         _promoteTypes(left);
         _promoteTypes(right);
+        if (isDEP30) { _clearTypePromotionsIfPotentiallyMutatedIn(left); } //DEP30(B.3.7)
         _clearTypePromotionsIfPotentiallyMutatedIn(right);
+      }//[DEP30(B.3.7) - else deal with != null, == null, etc.
+      else { _promoteTypesTrueAnd0(condition); }
+    } else if (isDEP30 && condition is PrefixExpression) {
+      PrefixExpression prefix = condition;
+      if (prefix.operator.type == sc.TokenType.BANG) {
+        _promoteTypesFalseCond0(prefix.operand);
       }
+      //DEP30]
     } else if (condition is IsExpression) {
       IsExpression is2 = condition;
       if (is2.notOperator == null) {
@@ -13561,7 +13603,8 @@ class TypeProviderImpl implements TypeProvider {
   }
 
   @override
-  InterfaceType get nullType => _nullType;
+  InterfaceType get nullType => //DEP30: was _nullType;
+      sanityCheckDEP30(_nullType, (t) => isNullType(t));
 
   @override
   InterfaceType get numType => _numType;
@@ -13625,6 +13668,7 @@ class TypeProviderImpl implements TypeProvider {
     _listType = _getType(coreNamespace, "List");
     _mapType = _getType(coreNamespace, "Map");
     _nullType = _getType(coreNamespace, "Null");
+    if (_nullType is TypeImpl) (_nullType as TypeImpl).isNull = true; //DEP30
     _numType = _getType(coreNamespace, "num");
     _objectType = _getType(coreNamespace, "Object");
     _stackTraceType = _getType(coreNamespace, "StackTrace");
@@ -13827,7 +13871,9 @@ class TypeResolverVisitor extends ScopedVisitor {
     if (classElement != null) {
       if (superclassType == null) {
         InterfaceType objectType = typeProvider.objectType;
-        if (!identical(classElement.type, objectType)) {
+        if (!identical(classElement.type, objectType) /*[DEP30(B.4.7)*/
+            && !identical(classElement.type, typeProvider.nullType)
+            /*DEP30]*/) {
           superclassType = objectType;
         }
       }
@@ -14052,6 +14098,10 @@ class TypeResolverVisitor extends ScopedVisitor {
     Element element = node.identifier.staticElement;
     if (element is ParameterElement) {
       (element as ParameterElementImpl).type = declaredType;
+      //[DEP30(E.1.1)
+      if (isDEP30 && element is DefaultParameterElementImpl) {
+        element.adjustCalleeViewTypeIfNecessary(node.parent, typeName, typeProvider);
+      } //DEP30]
     } else {
       // TODO(brianwilkerson) Report the internal error.
     }
@@ -14335,6 +14385,7 @@ class TypeResolverVisitor extends ScopedVisitor {
         type = type.substitute2(arguments, parameters);
       }
     }
+    type = _nullityAdjustedType0(node, type, typeProvider); //DEP30(B.2.2,B.2.3,B.3.1)
     typeName.staticType = type;
     node.type = type;
     return null;
@@ -14829,6 +14880,23 @@ class TypeResolverVisitor extends ScopedVisitor {
       }
     }
     element.type = type;
+    //[DEP30(B.2.6) - adjust type of nullable [TypeName] if necessary
+    // The return type of this element has already been processed.
+    // Here we change the function type from F to ?F as necessary.
+    var parent = returnType == null ? null : returnType.parent;
+    var identifier = parent == null ? null : parent.identifier;
+    NullityElement nullity = identifier == null 
+        ? null : identifier.getProperty(NULLITY_ELEMENT_KEY);
+    if (nullity != null 
+        && nullity.isNullable
+        && UnionWithNullType.isValidArg(type)) {
+      element.type = new UnionWithNullTypeImpl.from(type, typeProvider);
+    }
+    //DEP30(E.1.1)
+    if (isDEP30 && element is DefaultParameterElementImpl) {
+      element.adjustCalleeViewTypeIfNecessary(parent, identifier, typeProvider);
+    }
+    //DEP30]
   }
 
   /**
@@ -14943,6 +15011,8 @@ class TypeSystemImpl implements TypeSystem {
 
     // At this point type1 and type2 should both either be interface types or
     // function types.
+    if (type1.isNull) return new UnionWithNullTypeImpl.from(type2, typeProvider); //DEP30(B.4.7), since Null is a root, LUB(T,Null) is ?T.
+    if (type2.isNull) return new UnionWithNullTypeImpl.from(type1, typeProvider); //DEP30(B.4.7)
     if (type1 is InterfaceType && type2 is InterfaceType) {
       InterfaceType result =
           InterfaceTypeImpl.computeLeastUpperBound(type1, type2);
@@ -14957,7 +15027,11 @@ class TypeSystemImpl implements TypeSystem {
         return typeProvider.functionType;
       }
       return result;
-    } else {
+    } /*[DEP30(B.3.8)*/ else if (type1 is UnionWithNullType) {
+      return type1.getLUB(type2, this);
+    } else if (type2 is UnionWithNullType) {
+      return type2.getLUB(type1, this);
+    } /*DEP30]*/ else {
       // Should never happen.  As a defensive measure, return the dynamic type.
       assert(false);
       return typeProvider.dynamicType;
@@ -15354,6 +15428,13 @@ class VariableResolverVisitor extends ScopedVisitor {
         }
       }
     } else if (kind == ElementKind.PARAMETER) {
+      //[DEP30(E.1.1.1)
+      if (isDEP30 && element is DefaultParameterElementImpl) {
+        ParameterElement e = 
+            (element as DefaultParameterElementImpl).calleeViewParamElement;
+        if (e != null) element = e;
+      }
+      //DEP30]
       node.staticElement = element;
       if (node.inSetterContext()) {
         ParameterElementImpl parameterImpl = element as ParameterElementImpl;
@@ -15385,7 +15466,12 @@ class _ConstantVerifier_validateInitializerExpression extends ConstantVisitor {
   DartObjectImpl visitSimpleIdentifier(SimpleIdentifier node) {
     Element element = node.staticElement;
     for (ParameterElement parameterElement in parameterElements) {
-      if (identical(parameterElement, element) && parameterElement != null) {
+      if (/*[DEP30(E.1.1)*/element is DefaultCalleeViewParameterElementImpl
+          && identical(parameterElement, element.delegate)
+          && parameterElement != null
+          || 
+          //DEP30]
+          identical(parameterElement, element) && parameterElement != null) {
         DartType type = parameterElement.type;
         if (type != null) {
           if (type.isDynamic) {

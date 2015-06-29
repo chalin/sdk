@@ -31,7 +31,7 @@ class _SinkTransformerStreamSubscription<S, T>
   EventSink _transformerSink;
 
   /// The subscription to the input stream.
-  StreamSubscription<S> _subscription;
+  @nullable StreamSubscription<S> _subscription;
 
   _SinkTransformerStreamSubscription(Stream<S> source,
                                      _SinkMapper mapper,
@@ -105,7 +105,7 @@ class _SinkTransformerStreamSubscription<S, T>
     if (_isSubscribed) _subscription.resume();
   }
 
-  Future _onCancel() {
+  @nullable Future _onCancel() {
     if (_isSubscribed) {
       StreamSubscription subscription = _subscription;
       _subscription = null;

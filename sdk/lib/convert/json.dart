@@ -67,8 +67,8 @@ typedef _ToEncodable(var o);
  * JSON objects.
  */
 class JsonCodec extends Codec<Object, String> {
-  final _Reviver _reviver;
-  final _ToEncodable _toEncodable;
+  final /*?*/_Reviver _reviver;
+  final /*?*/_ToEncodable _toEncodable;
 
   /**
    * Creates a `JsonCodec` with the given reviver and encoding function.
@@ -165,13 +165,13 @@ class JsonEncoder extends Converter<Object, String> {
    *
    * If `null`, the output is encoded as a single line.
    */
-  final String indent;
+  final /*?*/String indent;
 
   /**
    * Function called on non-encodable objects to return a replacement
    * encodable object that will be encoded in the orignal's place.
    */
-  final Function _toEncodable;
+  final /*?*/Function _toEncodable;
 
   /**
    * Creates a JSON encoder.
@@ -321,7 +321,7 @@ class JsonUtf8Encoder extends Converter<Object, List<int>> {
         _toEncodable = toEncodable,
         _bufferSize = bufferSize;
 
-  static List<int> _utf8Encode(String string) {
+  static /*?*/List<int> _utf8Encode(String string) {
     if (string == null) return null;
     if (string.isEmpty) return new Uint8List(0);
     checkAscii: {
@@ -894,7 +894,7 @@ class _JsonStringStringifierPretty extends _JsonStringStringifier
 class _JsonUtf8Stringifier extends _JsonStringifier {
   final int bufferSize;
   final Function addChunk;
-  Uint8List buffer;
+  @nullable Uint8List buffer;
   int index = 0;
 
   _JsonUtf8Stringifier(toEncodable, int bufferSize, this.addChunk)

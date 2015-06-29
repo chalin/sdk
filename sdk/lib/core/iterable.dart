@@ -201,7 +201,7 @@ abstract class Iterable<E> {
    * Likewise the `Iterable` returned by a [Map.keys] call
    * should use the same equality that the `Map` uses for keys.
    */
-  bool contains(Object element) {
+  bool contains(/*?*/Object element) {
     for (E e in this) {
       if (e == element) return true;
     }
@@ -524,7 +524,7 @@ abstract class Iterable<E> {
    * If [orElse] is omitted, it defaults to throwing a [StateError].
    */
   E lastWhere(bool test(E element), {E orElse()}) {
-    E result = null;
+    /*?*/E result = null;
     bool foundMatching = false;
     for (E element in this) {
       if (test(element)) {
@@ -546,7 +546,7 @@ abstract class Iterable<E> {
    * one matching element, a [StateError] is thrown.
    */
   E singleWhere(bool test(E element)) {
-    E result = null;
+    /*?*/E result = null;
     bool foundMatching = false;
     for (E element in this) {
       if (test(element)) {
@@ -642,7 +642,7 @@ class _GeneratorIterator<E> implements Iterator<E> {
   final int _end;
   final _Generator<E> _generator;
   int _index;
-  E _current;
+  @nullable E _current;
 
   _GeneratorIterator(this._index, this._end, this._generator);
 

@@ -357,6 +357,22 @@ class TestTypeProvider implements TypeProvider {
   InterfaceType get nullType {
     if (_nullType == null) {
       _nullType = ElementFactory.classElement2("Null").type;
+      //[DEP30
+      if (isDEP30) {
+        _nullType = ElementFactory.classElement("Null", null).type;
+        (_nullType as TypeImpl).isNull = true; 
+  
+        ClassElementImpl classElement = _nullType.element as ClassElementImpl;
+        classElement.methods = <MethodElement>[
+          ElementFactory.methodElement("toString", stringType),
+          ElementFactory.methodElement("==", boolType, [dynamicType]),
+          ElementFactory.methodElement("noSuchMethod", dynamicType, [dynamicType])
+        ];
+        _setAccessors(classElement, <PropertyAccessorElement>[
+          ElementFactory.getterElement("hashCode", false, intType),
+          ElementFactory.getterElement("runtimeType", false, typeType)
+        ]);
+      } //DEP30]
     }
     return _nullType;
   }
@@ -368,6 +384,29 @@ class TestTypeProvider implements TypeProvider {
     }
     return _numType;
   }
+
+  //[DEP30
+  UnionWithNullTypeImpl _nullableObjType;
+  
+  // Only to be called once _objectType and _nullType have been initialized
+  DartType get maybeNullableObjType {
+    if (!isDEP30) return _objectType;
+    if (_nullableObjType == null) {
+      _nullableObjType = new UnionWithNullTypeImpl.from(_objectType, this);
+    }
+    return _nullableObjType;
+  }
+  
+  UnionWithNullTypeImpl _nullableIntType;
+  
+  DartType get nullableIntType {
+    if (!isDEP30) return _intType;
+    if (_nullableIntType == null) {
+      _nullableIntType = new UnionWithNullTypeImpl.from(_intType, this);
+    }
+    return _nullableIntType;
+  }
+  //DEP30]
 
   @override
   InterfaceType get objectType {
@@ -387,6 +426,12 @@ class TestTypeProvider implements TypeProvider {
         ElementFactory.getterElement("hashCode", false, intType),
         ElementFactory.getterElement("runtimeType", false, typeType)
       ]);
+      //[DEP30 - BUGs: match the real SDK
+      MethodElementImpl m = _objectType.methods.firstWhere((e) => e.name == "==");
+      (m.parameters[0] as dynamic).type = dynamicType;
+      PropertyAccessorElementImpl p = _objectType.accessors.firstWhere((e) => e.name == "hashCode");
+      (p.variable as dynamic).final2 = true;
+      //DEP30]
     }
     return _objectType;
   }
@@ -427,6 +472,7 @@ class TestTypeProvider implements TypeProvider {
             "codeUnits", false, listType.substitute4(<DartType>[intType]))
       ]);
       stringElement.methods = <MethodElement>[
+        ElementFactory.methodElement("[]", _stringType, [intType]), //DEP30
         ElementFactory.methodElement("+", _stringType, [_stringType]),
         ElementFactory.methodElement("toLowerCase", _stringType),
         ElementFactory.methodElement("toUpperCase", _stringType)
@@ -511,7 +557,7 @@ class TestTypeProvider implements TypeProvider {
       ElementFactory.methodElement("<=", _boolType, [_numType]),
       ElementFactory.methodElement(">", _boolType, [_numType]),
       ElementFactory.methodElement(">=", _boolType, [_numType]),
-      ElementFactory.methodElement("==", _boolType, [_objectType]),
+      ElementFactory.methodElement("==", _boolType, [dynamicType]), //DEP30: was _objectType
       ElementFactory.methodElement("isNaN", _boolType),
       ElementFactory.methodElement("isNegative", _boolType),
       ElementFactory.methodElement("isInfinite", _boolType),
@@ -544,6 +590,13 @@ class TestTypeProvider implements TypeProvider {
       ElementFactory.methodElement("truncate", _intType),
       ElementFactory.methodElement("toString", _stringType)
     ];
+    //[DEP30
+    // Approximation of signature for parse. Only enough so we can test.
+    // It is missing optional named parameters.
+    var parseMethod = ElementFactory.methodElement("parse", nullableIntType, [_stringType]);
+    parseMethod.setModifier(Modifier.STATIC, true);
+    intElement.methods.add(parseMethod);
+    //DEP30]
     ConstructorElementImpl fromEnvironment =
         ElementFactory.constructorElement(intElement, "fromEnvironment", true);
     fromEnvironment.parameters = <ParameterElement>[

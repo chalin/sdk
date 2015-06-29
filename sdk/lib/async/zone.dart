@@ -9,30 +9,30 @@ typedef dynamic ZoneUnaryCallback(arg);
 typedef dynamic ZoneBinaryCallback(arg1, arg2);
 
 typedef dynamic HandleUncaughtErrorHandler(
-    Zone self, ZoneDelegate parent, Zone zone, error, StackTrace stackTrace);
-typedef dynamic RunHandler(Zone self, ZoneDelegate parent, Zone zone, f());
+    Zone self, @nullable ZoneDelegate parent, Zone zone, error, StackTrace stackTrace);
+typedef dynamic RunHandler(Zone self, @nullable ZoneDelegate parent, Zone zone, f());
 typedef dynamic RunUnaryHandler(
-    Zone self, ZoneDelegate parent, Zone zone, f(arg), arg);
+    Zone self, @nullable ZoneDelegate parent, Zone zone, f(arg), arg);
 typedef dynamic RunBinaryHandler(
-    Zone self, ZoneDelegate parent, Zone zone, f(arg1, arg2), arg1, arg2);
+    Zone self, @nullable ZoneDelegate parent, Zone zone, f(arg1, arg2), arg1, arg2);
 typedef ZoneCallback RegisterCallbackHandler(
-    Zone self, ZoneDelegate parent, Zone zone, f());
+    Zone self, @nullable ZoneDelegate parent, Zone zone, f());
 typedef ZoneUnaryCallback RegisterUnaryCallbackHandler(
-    Zone self, ZoneDelegate parent, Zone zone, f(arg));
+    Zone self, @nullable ZoneDelegate parent, Zone zone, f(arg));
 typedef ZoneBinaryCallback RegisterBinaryCallbackHandler(
-    Zone self, ZoneDelegate parent, Zone zone, f(arg1, arg2));
-typedef AsyncError ErrorCallbackHandler(Zone self, ZoneDelegate parent,
+    Zone self, @nullable ZoneDelegate parent, Zone zone, f(arg1, arg2));
+typedef AsyncError ErrorCallbackHandler(Zone self, @nullable ZoneDelegate parent,
     Zone zone, Object error, StackTrace stackTrace);
 typedef void ScheduleMicrotaskHandler(
-    Zone self, ZoneDelegate parent, Zone zone, f());
+    Zone self, @nullable ZoneDelegate parent, Zone zone, f());
 typedef Timer CreateTimerHandler(
-    Zone self, ZoneDelegate parent, Zone zone, Duration duration, void f());
+    Zone self, @nullable ZoneDelegate parent, Zone zone, Duration duration, void f());
 typedef Timer CreatePeriodicTimerHandler(
-    Zone self, ZoneDelegate parent, Zone zone,
+    Zone self, @nullable ZoneDelegate parent, Zone zone,
     Duration period, void f(Timer timer));
 typedef void PrintHandler(
-    Zone self, ZoneDelegate parent, Zone zone, String line);
-typedef Zone ForkHandler(Zone self, ZoneDelegate parent, Zone zone,
+    Zone self, @nullable ZoneDelegate parent, Zone zone, String line);
+typedef Zone ForkHandler(Zone self, @nullable ZoneDelegate parent, Zone zone,
                          ZoneSpecification specification,
                          Map zoneValues);
 
@@ -109,30 +109,30 @@ abstract class ZoneSpecification {
    */
   factory ZoneSpecification.from(ZoneSpecification other, {
     dynamic handleUncaughtError(Zone self, ZoneDelegate parent, Zone zone,
-                                error, StackTrace stackTrace): null,
-    dynamic run(Zone self, ZoneDelegate parent, Zone zone, f()): null,
+                                error, StackTrace stackTrace)/*DEP30, was: ': null'*/,
+    dynamic run(Zone self, ZoneDelegate parent, Zone zone, f())/*DEP30, was: ': null'*/,
     dynamic runUnary(
-        Zone self, ZoneDelegate parent, Zone zone, f(arg), arg): null,
+        Zone self, ZoneDelegate parent, Zone zone, f(arg), arg)/*DEP30, was: ': null'*/,
     dynamic runBinary(Zone self, ZoneDelegate parent, Zone zone,
-                      f(arg1, arg2), arg1, arg2): null,
+                      f(arg1, arg2), arg1, arg2)/*DEP30, was: ': null'*/,
     ZoneCallback registerCallback(
-        Zone self, ZoneDelegate parent, Zone zone, f()): null,
+        Zone self, ZoneDelegate parent, Zone zone, f())/*DEP30, was: ': null'*/,
     ZoneUnaryCallback registerUnaryCallback(
-        Zone self, ZoneDelegate parent, Zone zone, f(arg)): null,
+        Zone self, ZoneDelegate parent, Zone zone, f(arg))/*DEP30, was: ': null'*/,
     ZoneBinaryCallback registerBinaryCallback(
-        Zone self, ZoneDelegate parent, Zone zone, f(arg1, arg2)): null,
+        Zone self, ZoneDelegate parent, Zone zone, f(arg1, arg2))/*DEP30, was: ': null'*/,
     AsyncError errorCallback(Zone self, ZoneDelegate parent, Zone zone,
                              Object error, StackTrace stackTrace),
     void scheduleMicrotask(
-        Zone self, ZoneDelegate parent, Zone zone, f()): null,
+        Zone self, ZoneDelegate parent, Zone zone, f())/*DEP30, was: ': null'*/,
     Timer createTimer(Zone self, ZoneDelegate parent, Zone zone,
-                      Duration duration, void f()): null,
+                      Duration duration, void f())/*DEP30, was: ': null'*/,
     Timer createPeriodicTimer(Zone self, ZoneDelegate parent, Zone zone,
-                              Duration period, void f(Timer timer)): null,
-    void print(Zone self, ZoneDelegate parent, Zone zone, String line): null,
+                              Duration period, void f(Timer timer))/*DEP30, was: ': null'*/,
+    void print(Zone self, ZoneDelegate parent, Zone zone, String line)/*DEP30, was: ': null'*/,
     Zone fork(Zone self, ZoneDelegate parent, Zone zone,
               ZoneSpecification specification,
-              Map zoneValues): null
+              Map zoneValues)/*DEP30, was: ': null'*/
   }) {
     return new ZoneSpecification(
       handleUncaughtError: handleUncaughtError != null
@@ -478,7 +478,7 @@ abstract class Zone {
   operator [](Object key);
 }
 
-ZoneDelegate _parentDelegate(_Zone zone) {
+@nullable ZoneDelegate _parentDelegate(_Zone zone) {
   if (zone.parent == null) return null;
   return zone.parent._delegate;
 }
@@ -540,7 +540,7 @@ class _ZoneDelegate implements ZoneDelegate {
     return handler(implZone, _parentDelegate(implZone), zone, f);
   }
 
-  AsyncError errorCallback(Zone zone, Object error, StackTrace stackTrace) {
+  @nullable AsyncError errorCallback(Zone zone, Object error, StackTrace stackTrace) {
     _ZoneFunction implementation = _delegationTarget._errorCallback;
     _Zone implZone = implementation.zone;
     if (identical(implZone, _ROOT_ZONE)) return null;
@@ -780,7 +780,7 @@ class _CustomZone extends _Zone {
   dynamic handleUncaughtError(error, StackTrace stackTrace) {
     _ZoneFunction implementation = this._handleUncaughtError;
     assert(implementation != null);
-    ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
+    /*?*/ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
     HandleUncaughtErrorHandler handler = implementation.function;
     return handler(
         implementation.zone, parentDelegate, this, error, stackTrace);
@@ -789,7 +789,7 @@ class _CustomZone extends _Zone {
   Zone fork({ZoneSpecification specification, Map zoneValues}) {
     _ZoneFunction implementation = this._fork;
     assert(implementation != null);
-    ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
+    /*?*/ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
     ForkHandler handler = implementation.function;
     return handler(implementation.zone, parentDelegate, this,
                    specification, zoneValues);
@@ -798,7 +798,7 @@ class _CustomZone extends _Zone {
   dynamic run(f()) {
     _ZoneFunction implementation = this._run;
     assert(implementation != null);
-    ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
+    /*?*/ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
     RunHandler handler = implementation.function;
     return handler(implementation.zone, parentDelegate, this, f);
   }
@@ -806,7 +806,7 @@ class _CustomZone extends _Zone {
   dynamic runUnary(f(arg), arg) {
     _ZoneFunction implementation = this._runUnary;
     assert(implementation != null);
-    ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
+    /*?*/ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
     RunUnaryHandler handler = implementation.function;
     return handler(implementation.zone, parentDelegate, this, f, arg);
   }
@@ -814,7 +814,7 @@ class _CustomZone extends _Zone {
   dynamic runBinary(f(arg1, arg2), arg1, arg2) {
     _ZoneFunction implementation = this._runBinary;
     assert(implementation != null);
-    ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
+    /*?*/ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
     RunBinaryHandler handler = implementation.function;
     return handler(
         implementation.zone, parentDelegate, this, f, arg1, arg2);
@@ -831,7 +831,7 @@ class _CustomZone extends _Zone {
   ZoneUnaryCallback registerUnaryCallback(f(arg)) {
     _ZoneFunction implementation = this._registerUnaryCallback;
     assert(implementation != null);
-    ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
+    /*?*/ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
     RegisterUnaryCallbackHandler handler = implementation.function;
     return handler(implementation.zone, parentDelegate, this, f);
   }
@@ -839,17 +839,17 @@ class _CustomZone extends _Zone {
   ZoneBinaryCallback registerBinaryCallback(f(arg1, arg2)) {
     _ZoneFunction implementation = this._registerBinaryCallback;
     assert(implementation != null);
-    ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
+    /*?*/ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
     RegisterBinaryCallbackHandler handler = implementation.function;
     return handler(implementation.zone, parentDelegate, this, f);
   }
 
-  AsyncError errorCallback(Object error, StackTrace stackTrace) {
+  @nullable AsyncError errorCallback(Object error, StackTrace stackTrace) {
     final _ZoneFunction implementation = this._errorCallback;
     assert(implementation != null);
     final Zone implementationZone = implementation.zone;
     if (identical(implementationZone, _ROOT_ZONE)) return null;
-    final ZoneDelegate parentDelegate = _parentDelegate(implementationZone);
+    final /*?*/ZoneDelegate parentDelegate = _parentDelegate(implementationZone);
     ErrorCallbackHandler handler = implementation.function;
     return handler(
         implementationZone, parentDelegate, this, error, stackTrace);
@@ -858,7 +858,7 @@ class _CustomZone extends _Zone {
   void scheduleMicrotask(void f()) {
     _ZoneFunction implementation = this._scheduleMicrotask;
     assert(implementation != null);
-    ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
+    /*?*/ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
     ScheduleMicrotaskHandler handler = implementation.function;
     return handler(implementation.zone, parentDelegate, this, f);
   }
@@ -866,7 +866,7 @@ class _CustomZone extends _Zone {
   Timer createTimer(Duration duration, void f()) {
     _ZoneFunction implementation = this._createTimer;
     assert(implementation != null);
-    ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
+    /*?*/ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
     CreateTimerHandler handler = implementation.function;
     return handler(implementation.zone, parentDelegate, this, duration, f);
   }
@@ -874,7 +874,7 @@ class _CustomZone extends _Zone {
   Timer createPeriodicTimer(Duration duration, void f(Timer timer)) {
     _ZoneFunction implementation = this._createPeriodicTimer;
     assert(implementation != null);
-    ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
+    /*?*/ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
     CreatePeriodicTimerHandler handler = implementation.function;
     return handler(
         implementation.zone, parentDelegate, this, duration, f);
@@ -883,20 +883,20 @@ class _CustomZone extends _Zone {
   void print(String line) {
     _ZoneFunction implementation = this._print;
     assert(implementation != null);
-    ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
+    /*?*/ZoneDelegate parentDelegate = _parentDelegate(implementation.zone);
     PrintHandler handler = implementation.function;
     return handler(implementation.zone, parentDelegate, this, line);
   }
 }
 
 void _rootHandleUncaughtError(
-    Zone self, ZoneDelegate parent, Zone zone, error, StackTrace stackTrace) {
+    @nullable Zone self, @nullable ZoneDelegate parent, Zone zone, error, StackTrace stackTrace) {
   _schedulePriorityAsyncCallback(() {
     throw new _UncaughtAsyncError(error, stackTrace);
   });
 }
 
-dynamic _rootRun(Zone self, ZoneDelegate parent, Zone zone, f()) {
+dynamic _rootRun(@nullable Zone self, @nullable ZoneDelegate parent, Zone zone, f()) {
   if (Zone._current == zone) return f();
 
   Zone old = Zone._enter(zone);
@@ -907,7 +907,7 @@ dynamic _rootRun(Zone self, ZoneDelegate parent, Zone zone, f()) {
   }
 }
 
-dynamic _rootRunUnary(Zone self, ZoneDelegate parent, Zone zone, f(arg), arg) {
+dynamic _rootRunUnary(@nullable Zone self, @nullable ZoneDelegate parent, Zone zone, f(arg), arg) {
   if (Zone._current == zone) return f(arg);
 
   Zone old = Zone._enter(zone);
@@ -918,7 +918,7 @@ dynamic _rootRunUnary(Zone self, ZoneDelegate parent, Zone zone, f(arg), arg) {
   }
 }
 
-dynamic _rootRunBinary(Zone self, ZoneDelegate parent, Zone zone,
+dynamic _rootRunBinary(@nullable Zone self, @nullable ZoneDelegate parent, Zone zone,
                        f(arg1, arg2), arg1, arg2) {
   if (Zone._current == zone) return f(arg1, arg2);
 
@@ -945,10 +945,10 @@ ZoneBinaryCallback _rootRegisterBinaryCallback(
   return f;
 }
 
-AsyncError _rootErrorCallback(Zone self, ZoneDelegate parent, Zone zone,
+@nullable AsyncError _rootErrorCallback(Zone self, ZoneDelegate parent, Zone zone,
                               Object error, StackTrace stackTrace) => null;
 
-void _rootScheduleMicrotask(Zone self, ZoneDelegate parent, Zone zone, f()) {
+void _rootScheduleMicrotask(@nullable Zone self, @nullable ZoneDelegate parent, Zone zone, f()) {
   if (!identical(_ROOT_ZONE, zone)) {
     bool hasErrorHandler = !_ROOT_ZONE.inSameErrorZone(zone);
     f = zone.bindCallback(f, runGuarded: hasErrorHandler);
@@ -983,7 +983,7 @@ void _printToZone(String line) {
   Zone.current.print(line);
 }
 
-Zone _rootFork(Zone self, ZoneDelegate parent, Zone zone,
+Zone _rootFork(@nullable Zone self, @nullable ZoneDelegate parent, Zone zone,
                ZoneSpecification specification,
                Map zoneValues) {
   // TODO(floitsch): it would be nice if we could get rid of this hack.
@@ -1061,7 +1061,7 @@ class _RootZone extends _Zone {
       const _ZoneFunction(_ROOT_ZONE, _rootHandleUncaughtError);
 
   // The parent zone.
-  _Zone get parent => null;
+  @nullable _Zone get parent => null;
 
   /// The zone's scoped value declaration map.
   ///
@@ -1070,7 +1070,7 @@ class _RootZone extends _Zone {
 
   static Map _rootMap = new HashMap();
 
-  static ZoneDelegate _rootDelegate;
+  static /*?*/ZoneDelegate _rootDelegate;
 
   ZoneDelegate get _delegate {
     if (_rootDelegate != null) return _rootDelegate;
@@ -1178,7 +1178,7 @@ class _RootZone extends _Zone {
 
   ZoneBinaryCallback registerBinaryCallback(f(arg1, arg2)) => f;
 
-  AsyncError errorCallback(Object error, StackTrace stackTrace) => null;
+  @nullable AsyncError errorCallback(Object error, StackTrace stackTrace) => null;
 
   void scheduleMicrotask(void f()) {
     _rootScheduleMicrotask(null, null, this, f);

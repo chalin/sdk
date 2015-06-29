@@ -41,9 +41,9 @@ abstract class MapBase<K, V> = Object with MapMixin<K, V>;
  */
 abstract class MapMixin<K, V> implements Map<K, V> {
   Iterable<K> get keys;
-  V operator[](Object key);
+  V operator[](/*?*/Object key);
   operator []=(K key, V value);
-  V remove(Object key);
+  V remove(/*?*/Object key);
   // The `clear` operation should not be based on `remove`.
   // It should clear the map even if some keys are not equal to themselves.
   void clear();
@@ -74,7 +74,7 @@ abstract class MapMixin<K, V> implements Map<K, V> {
     return this[key] = ifAbsent();
   }
 
-  bool containsKey(Object key) => keys.contains(key);
+  bool containsKey(/*?*/Object key) => keys.contains(key);
   int get length => keys.length;
   bool get isEmpty => keys.isEmpty;
   bool get isNotEmpty => keys.isNotEmpty;
@@ -135,7 +135,7 @@ class _MapBaseValueIterable<V> extends Iterable<V>
 class _MapBaseValueIterator<V> implements Iterator<V> {
   final Iterator _keys;
   final Map _map;
-  V _current = null;
+  @nullable V _current = null;
 
   _MapBaseValueIterator(Map map) : _map = map, _keys = map.keys.iterator;
 
@@ -164,7 +164,7 @@ abstract class _UnmodifiableMapMixin<K, V> implements Map<K, V> {
   void clear() {
     throw new UnsupportedError("Cannot modify unmodifiable map");
   }
-  V remove(Object key) {
+  V remove(/*?*/Object key) {
     throw new UnsupportedError("Cannot modify unmodifiable map");
   }
   V putIfAbsent(K key, V ifAbsent()) {
@@ -184,19 +184,19 @@ class MapView<K, V> implements Map<K, V> {
   final Map<K, V> _map;
   const MapView(Map<K, V> map) : _map = map;
 
-  V operator[](Object key) => _map[key];
+  V operator[](/*?*/Object key) => _map[key];
   void operator[]=(K key, V value) { _map[key] = value; }
   void addAll(Map<K, V> other) { _map.addAll(other); }
   void clear() { _map.clear(); }
   V putIfAbsent(K key, V ifAbsent()) => _map.putIfAbsent(key, ifAbsent);
-  bool containsKey(Object key) => _map.containsKey(key);
-  bool containsValue(Object value) => _map.containsValue(value);
+  bool containsKey(/*?*/Object key) => _map.containsKey(key);
+  bool containsValue(/*?*/Object value) => _map.containsValue(value);
   void forEach(void action(K key, V value)) { _map.forEach(action); }
   bool get isEmpty => _map.isEmpty;
   bool get isNotEmpty => _map.isNotEmpty;
   int get length => _map.length;
   Iterable<K> get keys => _map.keys;
-  V remove(Object key) => _map.remove(key);
+  V remove(/*?*/Object key) => _map.remove(key);
   String toString() => _map.toString();
   Iterable<V> get values => _map.values;
 }

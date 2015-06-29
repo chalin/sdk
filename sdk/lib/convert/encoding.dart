@@ -68,7 +68,7 @@ abstract class Encoding extends Codec<String, List<int>> {
   *
   * If character set is not supported [:null:] is returned.
   */
-  static Encoding getByName(String name) {
+  static /*?*/Encoding getByName(String name) {
     if (name == null) return null;
     name = name.toLowerCase();
     return _nameToEncoding[name];

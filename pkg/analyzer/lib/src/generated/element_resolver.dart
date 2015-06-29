@@ -13,6 +13,7 @@ import 'error.dart';
 import 'resolver.dart';
 import 'scanner.dart' as sc;
 import 'utilities_dart.dart';
+part '../nullity/element_resolver_part.dart'; //DEP30
 
 /**
  * An object used by instances of [ResolverVisitor] to resolve references within
@@ -72,7 +73,7 @@ import 'utilities_dart.dart';
  * combinators that are not defined in the imported library (which is not an
  * error).
  */
-class ElementResolver extends SimpleAstVisitor<Object> {
+class ElementResolver extends SimpleAstVisitor<Object> /*DEP30[*/ with ElementResolverNullity /*]*/ {
   /**
    * The resolver driving this participant.
    */
@@ -93,7 +94,7 @@ class ElementResolver extends SimpleAstVisitor<Object> {
    * generating warnings on "call" methods (fixes dartbug.com/21938).
    */
   bool _enableStrictCallChecks = false;
-
+  
   /**
    * The type representing the type 'dynamic'.
    */
@@ -124,6 +125,7 @@ class ElementResolver extends SimpleAstVisitor<Object> {
     AnalysisOptions options = _definingLibrary.context.analysisOptions;
     _enableHints = options.hint;
     _enableStrictCallChecks = options.enableStrictCallChecks;
+    _enableNonNullTypes = options.enableNonNullTypes; //DEP30
     _dynamicType = _resolver.typeProvider.dynamicType;
     _typeType = _resolver.typeProvider.typeType;
     _subtypeManager = new SubtypeManager();
@@ -160,6 +162,7 @@ class ElementResolver extends SimpleAstVisitor<Object> {
         MethodElement propagatedMethod =
             _lookUpMethod(leftHandSide, propagatedType, methodName);
         node.propagatedElement = propagatedMethod;
+        reportUnionTypeOperatorInvocationErrors(leftHandSide, methodName, operator, staticMethod, propagatedMethod); //DEP30(B.3.6)
         if (_shouldReportMissingMember(staticType, staticMethod)) {
           _recordUndefinedToken(staticType.element,
               StaticTypeWarningCode.UNDEFINED_METHOD, operator, [
@@ -641,6 +644,7 @@ class ElementResolver extends SimpleAstVisitor<Object> {
         argumentList.correspondingPropagatedParameters = parameters;
       }
     }
+    reportUnionTypeMethodInvocationErrors(target, methodName, staticElement, propagatedElement); //DEP30(B.3.6)
     //
     // Then check for error conditions.
     //
@@ -764,6 +768,7 @@ class ElementResolver extends SimpleAstVisitor<Object> {
     MethodElement propagatedMethod =
         _lookUpMethod(operand, propagatedType, methodName);
     node.propagatedElement = propagatedMethod;
+    reportUnionTypeOperatorInvocationErrors(operand, methodName, node.operator, staticMethod, propagatedMethod); //DEP30(B.3.6)
     if (_shouldReportMissingMember(staticType, staticMethod)) {
       if (operand is SuperExpression) {
         _recordUndefinedToken(staticType.element,
@@ -877,6 +882,7 @@ class ElementResolver extends SimpleAstVisitor<Object> {
       MethodElement propagatedMethod =
           _lookUpMethod(operand, propagatedType, methodName);
       node.propagatedElement = propagatedMethod;
+      reportUnionTypeOperatorInvocationErrors(operand, methodName, node.operator, staticMethod, propagatedMethod); //DEP30(B.3.6)
       if (_shouldReportMissingMember(staticType, staticMethod)) {
         if (operand is SuperExpression) {
           _recordUndefinedToken(staticType.element,
@@ -1124,7 +1130,9 @@ class ElementResolver extends SimpleAstVisitor<Object> {
       FunctionType getterType = element.type;
       if (getterType != null) {
         DartType returnType = getterType.returnType;
-        if (!_isExecutableType(returnType)) {
+        if (!_isExecutableType(returnType) //[DEP30(B.3.7) 
+            // and BUG fix for ~/dev/dart/DEP/nnbd/code/test/test2.dart
+            && !_isPromotedTypeExecutable0(element) /*DEP30]*/) {
           return StaticTypeWarningCode.INVOCATION_OF_NON_FUNCTION;
         }
       }
@@ -1143,7 +1151,7 @@ class ElementResolver extends SimpleAstVisitor<Object> {
       // This is really a function expression invocation.
       //
       // TODO(brianwilkerson) Consider the possibility of re-writing the AST.
-      if (element is PropertyInducingElement) {
+      if (element is PropertyInducingElement) { //DEP30-note: none of the analyzer tests trigger this case.
         PropertyAccessorElement getter = element.getter;
         FunctionType getterType = getter.type;
         if (getterType != null) {
@@ -1154,7 +1162,9 @@ class ElementResolver extends SimpleAstVisitor<Object> {
         }
       } else if (element is VariableElement) {
         DartType variableType = element.type;
-        if (!_isExecutableType(variableType)) {
+        if (!_isExecutableType(variableType) //[DEP30(B.3.7) 
+            // and BUG fix for ~/dev/dart/DEP/nnbd/code/test/test2.dart
+            && !_isPromotedTypeExecutable0(element) /*DEP30]*/) {
           return StaticTypeWarningCode.INVOCATION_OF_NON_FUNCTION;
         }
       } else {
@@ -1181,7 +1191,8 @@ class ElementResolver extends SimpleAstVisitor<Object> {
           }
           if (targetType == null) {
             return StaticTypeWarningCode.UNDEFINED_FUNCTION;
-          } else if (!targetType.isDynamic && !targetType.isBottom) {
+          } else if (!targetType.isDynamic && !targetType.isBottom /*[DEP30(D.2.1)*/
+              /*DEP30-TODO for !dynamic: !targetType is NonNullType ...*/ /*DEP30]*/) {
             // Proxy-conditional warning, based on state of
             // targetType.getElement()
             return StaticTypeWarningCode.UNDEFINED_METHOD;
@@ -1210,6 +1221,12 @@ class ElementResolver extends SimpleAstVisitor<Object> {
             _shouldReportMissingMember(propagatedType, propagatedMethod) &&
             !_memberFoundInSubclass(
                 propagatedType.element, methodName, true, false);
+    //[DEP30(B.2.8)
+    shouldReportMissingMember_static = shouldReportMissingMember_static ||
+        _shouldReportMissingUnionWithNullMember(staticMethod, propagatedMethod);
+    shouldReportMissingMember_propagated = shouldReportMissingMember_propagated ||
+        _shouldReportMissingUnionWithNullMember(staticMethod, propagatedMethod);
+    //DEP30]
     if (shouldReportMissingMember_static ||
         shouldReportMissingMember_propagated) {
       sc.Token leftBracket = expression.leftBracket;
@@ -1416,7 +1433,9 @@ class ElementResolver extends SimpleAstVisitor<Object> {
    */
   DartType _getStaticType(Expression expression) {
     if (expression is NullLiteral) {
-      return _resolver.typeProvider.bottomType;
+      return //[DEP30(A.2.1). Also below, why force generalization to 'Function'?
+          _enableNonNullTypes ? _resolver.typeProvider.nullType : //DEP30]
+          _resolver.typeProvider.bottomType;
     }
     DartType staticType = _resolveTypeParameter(expression.staticType);
     if (staticType is FunctionType) {
@@ -1554,6 +1573,9 @@ class ElementResolver extends SimpleAstVisitor<Object> {
   PropertyAccessorElement _lookUpGetter(
       Expression target, DartType type, String getterName) {
     type = _resolveTypeParameter(type);
+    //DEP30(B.3.6)
+    if (type is UnionWithNullType) return type.lookUpGetter(getterName, _definingLibrary);
+    //DEP30]
     if (type is InterfaceType) {
       InterfaceType interfaceType = type;
       PropertyAccessorElement accessor;
@@ -1629,6 +1651,11 @@ class ElementResolver extends SimpleAstVisitor<Object> {
    */
   ExecutableElement _lookupGetterOrMethod(DartType type, String memberName) {
     type = _resolveTypeParameter(type);
+    //[DEP30(B.3.6)
+    if (type is UnionWithNullType) {
+      ExecutableElement member = type.lookUpMethod(memberName, _definingLibrary);
+      return member != null ? member : type.lookUpGetter(memberName, _definingLibrary);
+    }//DEP30]
     if (type is InterfaceType) {
       InterfaceType interfaceType = type;
       ExecutableElement member =
@@ -1709,6 +1736,13 @@ class ElementResolver extends SimpleAstVisitor<Object> {
   MethodElement _lookUpMethod(
       Expression target, DartType type, String methodName) {
     type = _resolveTypeParameter(type);
+    //[DEP30:BUG - [FunctionType] case is not properly handled; see test case in my notes.
+    //This workaround is more apparently needed in presence of non-null types.
+    if(/*_enableNonNullTypes &&*/ type is FunctionType) {
+      return _lookUpMethod(target, _resolver.typeProvider.functionType, methodName);
+    } else if (type is UnionWithNullType) {
+      return type.lookUpMethod(methodName, _definingLibrary);
+    }//DEP30]
     if (type is InterfaceType) {
       InterfaceType interfaceType = type;
       MethodElement method;
@@ -1786,6 +1820,10 @@ class ElementResolver extends SimpleAstVisitor<Object> {
   PropertyAccessorElement _lookUpSetter(
       Expression target, DartType type, String setterName) {
     type = _resolveTypeParameter(type);
+    //[DEP30(B.3.6)
+    if (type is UnionWithNullType) {
+          return type.lookUpGetter(setterName, _definingLibrary);
+    }//DEP30]
     if (type is InterfaceType) {
       InterfaceType interfaceType = type;
       PropertyAccessorElement accessor;
@@ -2217,6 +2255,7 @@ class ElementResolver extends SimpleAstVisitor<Object> {
       MethodElement propagatedMethod =
           _lookUpMethod(leftOperand, propagatedType, methodName);
       node.propagatedElement = propagatedMethod;
+      reportUnionTypeOperatorInvocationErrors(leftOperand, methodName, node.operator, staticMethod, propagatedMethod); //DEP30(B.3.6)
       if (_shouldReportMissingMember(staticType, staticMethod)) {
         if (leftOperand is SuperExpression) {
           _recordUndefinedToken(staticType.element,
@@ -2354,7 +2393,8 @@ class ElementResolver extends SimpleAstVisitor<Object> {
    */
   Element _resolveInvokedElementWithTarget(Expression target,
       DartType targetType, SimpleIdentifier methodName, bool isConditional) {
-    if (targetType is InterfaceType) {
+    // DEP30(B.3.1.b). Note: should test below be over a general i/f of something i/fType-like?
+    if (targetType is InterfaceType || ifDEP30(targetType is UnionWithNullType,false)) {
       Element element = _lookUpMethod(target, targetType, methodName.name);
       if (element == null) {
         //
@@ -2456,6 +2496,7 @@ class ElementResolver extends SimpleAstVisitor<Object> {
             _shouldReportMissingMember(propagatedType, propagatedElement) &&
             !_memberFoundInSubclass(
                 propagatedType.element, propertyName.name, false, true);
+    reportUnionTypeMethodInvocationErrors(target, propertyName, staticElement, propagatedElement); //DEP30(B.3.6)
     if (shouldReportMissingMember_static ||
         shouldReportMissingMember_propagated) {
       DartType staticOrPropagatedType =
@@ -2599,6 +2640,9 @@ class ElementResolver extends SimpleAstVisitor<Object> {
    * be used when looking up members. Otherwise, return the original type.
    */
   DartType _resolveTypeParameter(DartType type) {
+    //[DEP30(C.3.1), (C.3.3).
+    DartType resolvedType = _resolveTypeParameter0(type, _resolver.typeProvider);
+    if (resolvedType != null) return resolvedType; //DEP30]
     if (type is TypeParameterType) {
       DartType bound = type.element.bound;
       if (bound == null) {
@@ -2692,7 +2736,7 @@ class ElementResolver extends SimpleAstVisitor<Object> {
     for (int i = 0; i < annotationCount; i++) {
       Annotation annotation = annotations[i];
       Element resolvedElement = annotation.element;
-      if (resolvedElement != null) {
+      if (resolvedElement != null) { //DEP30-note: consider not creating a new element if it exists
         ElementAnnotationImpl elementAnnotation =
             new ElementAnnotationImpl(resolvedElement);
         annotation.elementAnnotation = elementAnnotation;

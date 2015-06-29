@@ -22,7 +22,7 @@ abstract class IterableMixin<E> implements Iterable<E> {
   Iterable expand(Iterable f(E element)) =>
       new ExpandIterable<E, dynamic>(this, f);
 
-  bool contains(Object element) {
+  bool contains(/*?*/Object element) {
     for (E e in this) {
       if (e == element) return true;
     }
@@ -156,7 +156,7 @@ abstract class IterableMixin<E> implements Iterable<E> {
   }
 
   E lastWhere(bool test(E value), { E orElse() }) {
-    E result = null;
+    /*?*/E result = null;
     bool foundMatching = false;
     for (E element in this) {
       if (test(element)) {
@@ -170,7 +170,7 @@ abstract class IterableMixin<E> implements Iterable<E> {
   }
 
   E singleWhere(bool test(E value)) {
-    E result = null;
+    /*?*/E result = null;
     bool foundMatching = false;
     for (E element in this) {
       if (test(element)) {
@@ -375,7 +375,7 @@ void _iterablePartsToStrings(Iterable iterable, List parts) {
 
   // If there is a gap between the initial run and the last two,
   // prepare to add an ellipsis.
-  String elision = null;
+  /*?*/String elision = null;
   if (count > parts.length + TAIL_COUNT) {
     elision = "...";
     length += ELLIPSIS_SIZE + OVERHEAD;

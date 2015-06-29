@@ -87,7 +87,7 @@ abstract class ListMixin<E> implements List<E> {
     return this[0];
   }
 
-  bool contains(Object element) {
+  bool contains(/*?*/Object element) {
     int length = this.length;
     for (int i = 0; i < this.length; i++) {
       if (this[i] == element) return true;
@@ -148,7 +148,7 @@ abstract class ListMixin<E> implements List<E> {
 
   E singleWhere(bool test(E element)) {
     int length = this.length;
-    E match = null;
+    /*?*/E match = null;
     bool matchFound = false;
     for (int i = 0; i < length; i++) {
       E element = this[i];
@@ -249,7 +249,7 @@ abstract class ListMixin<E> implements List<E> {
     }
   }
 
-  bool remove(Object element) {
+  bool remove(/*?*/Object element) {
     for (int i = 0; i < this.length; i++) {
       if (this[i] == element) {
         this.setRange(i, this.length - 1, this, i + 1);
@@ -304,7 +304,7 @@ abstract class ListMixin<E> implements List<E> {
   void sort([int compare(E a, E b)]) {
     if (compare == null) {
       var defaultCompare = Comparable.compare;
-      compare = defaultCompare;
+      compare = defaultCompare; //DEP30: A value of type '(Comparable, Comparable) → int' cannot be assigned to a variable of type '?(E, E) → int'
     }
     Sort.sort(this, compare);
   }
@@ -413,7 +413,7 @@ abstract class ListMixin<E> implements List<E> {
     }
   }
 
-  int indexOf(Object element, [int startIndex = 0]) {
+  int indexOf(/*?*/Object element, [int startIndex = 0]) {
     if (startIndex >= this.length) {
       return -1;
     }
@@ -433,7 +433,7 @@ abstract class ListMixin<E> implements List<E> {
    * the search at index [startIndex] to 0.
    * Returns -1 if [element] is not found.
    */
-  int lastIndexOf(Object element, [int startIndex]) {
+  int lastIndexOf(/*?*/Object element, [int startIndex]) {
     if (startIndex == null) {
       startIndex = this.length - 1;
     } else {

@@ -14,7 +14,7 @@ part of dart.core;
 class StringBuffer implements StringSink {
 
   /** Creates the string buffer with an initial content. */
-  external StringBuffer([Object content = ""]);
+  external StringBuffer([/*?*/Object content = ""]);
 
   /**
    * Returns the length of the content that has been accumulated so far.
@@ -32,14 +32,14 @@ class StringBuffer implements StringSink {
   bool get isNotEmpty => !isEmpty;
 
   /// Adds the contents of [obj], converted to a string, to the buffer.
-  external void write(Object obj);
+  external void write(/*?*/Object obj);
 
   /// Adds the string representation of [charCode] to the buffer.
   external void writeCharCode(int charCode);
 
   external void writeAll(Iterable objects, [String separator = ""]);
 
-  external void writeln([Object obj = ""]);
+  external void writeln([/*?*/Object obj = ""]);
 
   /**
    * Clears the string buffer.

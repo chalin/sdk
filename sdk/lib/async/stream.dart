@@ -138,12 +138,12 @@ abstract class Stream<T> {
    * If [computation] is omitted the event values will all be `null`.
    */
   factory Stream.periodic(Duration period,
-                          [T computation(int computationCount)]) {
+                          [@nullable T computation(int computationCount)]) {
     if (computation == null) computation = ((i) => null);
 
-    Timer timer;
+    /*?*/Timer timer;
     int computationCount = 0;
-    StreamController<T> controller;
+    StreamController</*?*/T> controller;
     // Counts the time that the Stream was running (and not paused).
     Stopwatch watch = new Stopwatch();
 
@@ -284,7 +284,7 @@ abstract class Stream<T> {
    * If [cancelOnError] is true, the subscription is ended when
    * the first error is reported. The default is false.
    */
-  StreamSubscription<T> listen(void onData(T event),
+  StreamSubscription<T> listen(void /*?*/onData(T event),
                                { Function onError,
                                  void onDone(),
                                  bool cancelOnError});
@@ -959,7 +959,7 @@ abstract class Stream<T> {
    */
   Future<T> get last {
     _Future<T> future = new _Future<T>();
-    T result = null;
+    /*?*/T result = null;
     bool foundResult = false;
     listen(
       (T value) {
@@ -992,7 +992,7 @@ abstract class Stream<T> {
    */
   Future<T> get single {
     _Future<T> future = new _Future<T>();
-    T result = null;
+    /*?*/T result = null;
     bool foundResult = false;
     StreamSubscription subscription;
     subscription = this.listen(
@@ -1086,7 +1086,7 @@ abstract class Stream<T> {
    */
   Future<dynamic> lastWhere(bool test(T element), {Object defaultValue()}) {
     _Future<dynamic> future = new _Future();
-    T result = null;
+    /*?*/T result = null;
     bool foundResult = false;
     StreamSubscription subscription;
     subscription = this.listen(
@@ -1130,7 +1130,7 @@ abstract class Stream<T> {
    */
   Future<T> singleWhere(bool test(T element)) {
     _Future<T> future = new _Future<T>();
-    T result = null;
+    /*?*/T result = null;
     bool foundResult = false;
     StreamSubscription subscription;
     subscription = this.listen(
@@ -1233,7 +1233,7 @@ abstract class Stream<T> {
   Stream timeout(Duration timeLimit, {void onTimeout(EventSink sink)}) {
     StreamController controller;
     // The following variables are set on listen.
-    StreamSubscription<T> subscription;
+    /*?*/StreamSubscription<T> subscription;
     Timer timer;
     Zone zone;
     Function timeout;
@@ -1264,7 +1264,7 @@ abstract class Stream<T> {
       if (onTimeout == null) {
         timeout = () {
           controller.addError(new TimeoutException("No stream event",
-                                                   timeLimit), null);
+                                                   timeLimit)); //DEP30, was: , null
         };
       } else {
         onTimeout = zone.registerUnaryCallback(onTimeout);
@@ -1332,7 +1332,7 @@ abstract class StreamSubscription<T> {
    *
    * Returns `null` if there is no need to wait.
    */
-  Future cancel();
+  @nullable Future cancel();
 
   /**
    * Set or override the data event handler of this subscription.
@@ -1438,7 +1438,7 @@ class StreamView<T> extends Stream<T> {
                                void onCancel(StreamSubscription subscription)})
       => _stream.asBroadcastStream(onListen: onListen, onCancel: onCancel);
 
-  StreamSubscription<T> listen(void onData(T value),
+  StreamSubscription<T> listen(void /*?*/onData(T value),
                                { Function onError,
                                  void onDone(),
                                  bool cancelOnError }) {
@@ -1713,7 +1713,7 @@ abstract class StreamIterator<T> {
    * Returns a future if the cancel-operation is not completed synchronously.
    * Otherwise returns `null`.
    */
-  Future cancel();
+  @nullable Future cancel();
 }
 
 
@@ -1721,7 +1721,7 @@ abstract class StreamIterator<T> {
  * Wraps an [_EventSink] so it exposes only the [EventSink] interface.
  */
 class _ControllerEventSinkWrapper<T> implements EventSink<T> {
-  EventSink _sink;
+  @nullable EventSink _sink;
   _ControllerEventSinkWrapper(this._sink);
 
   void add(T data) { _sink.add(data); }

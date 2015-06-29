@@ -91,7 +91,7 @@ abstract class _BroadcastStreamController<T>
   _BroadcastSubscriptionLink _previous;
 
   // Extra state used during an [addStream] call.
-  _AddStreamState<T> _addStreamState;
+  @nullable _AddStreamState<T> _addStreamState;
 
   /**
    * Future returned by [close] and [done].
@@ -106,7 +106,7 @@ abstract class _BroadcastStreamController<T>
    * Any attempt to listen after calling [close] will throw, so there won't
    * be any further listeners.
    */
-  _Future _doneFuture;
+  @nullable _Future _doneFuture;
 
   _BroadcastStreamController(this._onListen, this._onCancel)
       : _state = _STATE_INITIAL {
@@ -201,7 +201,7 @@ abstract class _BroadcastStreamController<T>
     return subscription;
   }
 
-  Future _recordCancel(_BroadcastSubscription<T> subscription) {
+  @nullable Future _recordCancel(_BroadcastSubscription<T> subscription) {
     // If already removed by the stream, don't remove it again.
     if (identical(subscription._next, subscription)) return null;
     assert(!identical(subscription._next, subscription));
@@ -280,7 +280,7 @@ abstract class _BroadcastStreamController<T>
 
   void _close() {
     assert(_isAddingStream);
-    _AddStreamState addState = _addStreamState;
+    /*?*/_AddStreamState addState = _addStreamState;
     _addStreamState = null;
     _state &= ~_STATE_ADDSTREAM;
     addState.complete();
@@ -445,7 +445,7 @@ class _AsyncBroadcastStreamController<T> extends _BroadcastStreamController<T> {
 class _AsBroadcastStreamController<T>
     extends _SyncBroadcastStreamController<T>
     implements _EventDispatch<T> {
-  _StreamImplEvents _pending;
+  @nullable _StreamImplEvents _pending;
 
   _AsBroadcastStreamController(void onListen(), void onCancel())
       : super(onListen, onCancel);

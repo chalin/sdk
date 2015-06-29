@@ -721,7 +721,9 @@ class ConstantEvaluationEngine {
         // direct error messages to the constructor call.
         errorTarget = node;
       }
-      if (argumentValue == null && baseParameter is ParameterElementImpl) {
+      if (argumentValue == null && baseParameter is ParameterElementImpl //[DEP30
+          //BUG in DartC to be missing this conditional?
+          && /*ifDEP30*/(baseParameter.parameterKind.isOptional)/*DEP30]*/) {
         // The parameter is an optional positional parameter for which no value
         // was provided, so use the default value.
         validator.beforeGetParameterDefault(baseParameter);
@@ -943,10 +945,10 @@ class ConstantEvaluationEngine {
    * checking rules.
    */
   bool runtimeTypeMatch(DartObjectImpl obj, DartType type) {
-    if (obj.isNull) {
+    if (obj.isNull && !isDEP30 /*DEP30(A.2.3)*/) {
       return true;
     }
-    if (type.isUndefined) {
+    if (type.isUndefined && ifDEP30(!obj.isNull) /*DEP30(A.2.3)*/) {
       return false;
     }
     return obj.type.isSubtypeOf(type);

@@ -159,6 +159,19 @@ class AnalysisContextFactory {
       ElementFactory.functionElement3("print", VoidTypeImpl.instance.element,
           <ClassElement>[objectClassElement], null)
     ];
+    //[DEP30
+    ClassElementImpl nullableClassElement = ElementFactory.classElement2("Nullable");
+    ClassElementImpl nonNullClassElement = ElementFactory.classElement2("NonNull");
+    ClassElementImpl nullableByDefaultClassElement = ElementFactory.classElement2("NullableByDefault");
+    TopLevelVariableElement nullableTopLevelVariableElt = ElementFactory
+        .topLevelVariableElement3("nullable", true, false, nullableClassElement.type);
+    TopLevelVariableElement nullablePfsTopLevelVariableElt = ElementFactory
+        .topLevelVariableElement3("nullable_pfs", true, false, nullableClassElement.type);
+    TopLevelVariableElement nullableByDefaultTopLevelVariableElt = ElementFactory
+        .topLevelVariableElement3("nullable_by_default", true, false, nullableByDefaultClassElement.type);
+    TopLevelVariableElement nonNullTopLevelVariableElt = ElementFactory
+        .topLevelVariableElement3("non_null", true, false, nonNullClassElement.type);
+    //DEP30]
     TopLevelVariableElement proxyTopLevelVariableElt = ElementFactory
         .topLevelVariableElement3("proxy", true, false, proxyClassElement.type);
     ConstTopLevelVariableElementImpl deprecatedTopLevelVariableElt =
@@ -170,10 +183,18 @@ class AnalysisContextFactory {
             [AstFactory.string2('next release')]);
     coreUnit.accessors = <PropertyAccessorElement>[
       proxyTopLevelVariableElt.getter,
+      nullableTopLevelVariableElt.getter, //DEP30
+      nullablePfsTopLevelVariableElt.getter, //DEP30
+      nullableByDefaultTopLevelVariableElt.getter, //DEP30
+      nonNullTopLevelVariableElt.getter, //DEP30
       deprecatedTopLevelVariableElt.getter
     ];
     coreUnit.topLevelVariables = <TopLevelVariableElement>[
       proxyTopLevelVariableElt,
+      nullableTopLevelVariableElt, //DEP30
+      nullablePfsTopLevelVariableElt, //DEP30
+      nullableByDefaultTopLevelVariableElt, //DEP30
+      nonNullTopLevelVariableElt, //DEP30
       deprecatedTopLevelVariableElt
     ];
     LibraryElementImpl coreLibrary = new LibraryElementImpl.forNode(
@@ -7793,6 +7814,9 @@ class ResolverTestCase extends EngineTestCase {
       [List<ErrorCode> expectedErrorCodes = ErrorCode.EMPTY_LIST]) {
     GatheringErrorListener errorListener = new GatheringErrorListener();
     for (AnalysisError error in analysisContext2.computeErrors(source)) {
+      //[DEP30-tmp
+      //print(error);
+      //DEP30]
       ErrorCode errorCode = error.errorCode;
       if (!enableUnusedElement &&
           (errorCode == HintCode.UNUSED_ELEMENT ||

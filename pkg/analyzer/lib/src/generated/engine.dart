@@ -1105,6 +1105,7 @@ class AnalysisContextImpl implements InternalAnalysisContext {
         this._options.preserveComments != options.preserveComments ||
         this._options.enableNullAwareOperators !=
             options.enableNullAwareOperators ||
+        this._options.enableNonNullTypes != options.enableNonNullTypes || //DEP30
         this._options.enableStrictCallChecks != options.enableStrictCallChecks;
     int cacheSize = options.cacheSize;
     if (this._options.cacheSize != cacheSize) {
@@ -1131,6 +1132,7 @@ class AnalysisContextImpl implements InternalAnalysisContext {
     this._options.generateSdkErrors = options.generateSdkErrors;
     this._options.dart2jsHint = options.dart2jsHint;
     this._options.enableNullAwareOperators = options.enableNullAwareOperators;
+    this._options.enableNonNullTypes = options.enableNonNullTypes; //DEP30
     this._options.enableStrictCallChecks = options.enableStrictCallChecks;
     this._options.hint = options.hint;
     this._options.incremental = options.incremental;
@@ -6175,6 +6177,12 @@ abstract class AnalysisOptions {
    * Return `true` if analysis is to parse comments.
    */
   bool get preserveComments;
+
+  /**
+   * A flag indicating whether non-null types and non-null-by-default
+   * should be enabled (DEP 30).
+   */
+  bool enableNonNullTypes = false;
 }
 
 /**
@@ -6280,6 +6288,12 @@ class AnalysisOptionsImpl implements AnalysisOptions {
   bool preserveComments = true;
 
   /**
+   * A flag indicating whether non-null types and non-null-by-default
+   * should be enabled (DEP 30).
+   */
+  bool enableNonNullTypes = const String.fromEnvironment("DEP_NNBD") != null; // was false;
+
+  /**
    * Initialize a newly created set of analysis options to have their default
    * values.
    */
@@ -6295,6 +6309,7 @@ class AnalysisOptionsImpl implements AnalysisOptions {
     cacheSize = options.cacheSize;
     dart2jsHint = options.dart2jsHint;
     enableNullAwareOperators = options.enableNullAwareOperators;
+    enableNonNullTypes = options.enableNonNullTypes; //DEP30
     enableStrictCallChecks = options.enableStrictCallChecks;
     generateImplicitErrors = options.generateImplicitErrors;
     generateSdkErrors = options.generateSdkErrors;
@@ -6315,6 +6330,7 @@ class AnalysisOptionsImpl implements AnalysisOptions {
     cacheSize = options.cacheSize;
     dart2jsHint = options.dart2jsHint;
     enableNullAwareOperators = options.enableNullAwareOperators;
+    enableNonNullTypes = options.enableNonNullTypes; //DEP30
     enableStrictCallChecks = options.enableStrictCallChecks;
     generateImplicitErrors = options.generateImplicitErrors;
     generateSdkErrors = options.generateSdkErrors;

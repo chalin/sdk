@@ -845,7 +845,7 @@ class Int64 implements IntX {
 
   // Determine whether the platform supports ints greater than 2^53
   // without loss of precision.
-  static bool _haveBigIntsCached = null;
+  static /*?*/bool _haveBigIntsCached = null; //DEP30
 
   static bool get _haveBigInts {
     if (_haveBigIntsCached == null) {

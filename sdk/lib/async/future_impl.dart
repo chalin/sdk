@@ -69,15 +69,15 @@ class _FutureListener {
   static const int STATE_CATCHERROR_TEST = MASK_ERROR | MASK_TEST_ERROR;
   static const int STATE_WHENCOMPLETE = MASK_WHENCOMPLETE;
   // Listeners on the same future are linked through this link.
-  _FutureListener _nextListener = null;
+  @nullable _FutureListener _nextListener = null;
   // The future to complete when this listener is activated.
   final _Future result;
   // Which fields means what.
   final int state;
   // Used for then/whenDone callback and error test
-  final Function callback;
+  @nullable final Function callback;
   // Used for error callbacks.
-  final Function errorCallback;
+  @nullable final Function errorCallback;
 
   _FutureListener.then(this.result,
                        _FutureOnValue onValue, Function errorCallback)
@@ -285,7 +285,7 @@ class _Future<T> implements Future<T> {
     assert(!_isComplete);
     _FutureListener current = _resultOrListeners;
     _resultOrListeners = null;
-    _FutureListener prev = null;
+    /*?*/_FutureListener prev = null;
     while (current != null) {
       _FutureListener next = current._nextListener;
       current._nextListener = prev;

@@ -258,7 +258,7 @@ abstract class Future<T> {
                            {bool eagerError: false,
                             void cleanUp(successValue)}) {
     final _Future<List> result = new _Future<List>();
-    List values;  // Collects the values. Set to null on error.
+    /*?*/List values;  // Collects the values. Set to null on error.
     int remaining = 0;  // How many futures are we waiting for.
     var error;   // The first error from a future.
     StackTrace stackTrace;  // The stackTrace that came with the error.
@@ -291,7 +291,7 @@ abstract class Future<T> {
     // position in the list of values.
     for (Future future in futures) {
       int pos = remaining++;
-      future.then((Object value) {
+      future.then((/*?*/Object value) {
         remaining--;
         if (values != null) {
           values[pos] = value;

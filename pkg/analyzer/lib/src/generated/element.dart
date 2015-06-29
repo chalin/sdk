@@ -26,6 +26,12 @@ import 'sdk.dart' show DartSdk;
 import 'source.dart';
 import 'utilities_collection.dart';
 import 'utilities_dart.dart';
+//[DEP30
+part '../nullity/element_general_part.dart';
+part '../nullity/element_core_part.dart';
+part '../nullity/element_nullity_part.dart';
+part '../nullity/element_type_part.dart';
+//DEP30]
 
 /**
  * For AST nodes that could be in both the getter and setter contexts
@@ -1277,6 +1283,7 @@ abstract class CompilationUnitElement implements Element, UriReferencedElement {
  */
 class CompilationUnitElementImpl extends UriReferencedElementImpl
     implements CompilationUnitElement {
+  bool isNullableByDefault = false; //DEP30(G.2) - only set for parts that are NUBD based on an annotation in the owning library.
   /**
    * An empty list of compilation unit elements.
    */
@@ -1989,7 +1996,7 @@ abstract class ConstVariableElement implements PotentiallyConstVariableElement {
 /**
  * The type associated with elements in the element model.
  */
-abstract class DartType {
+abstract class DartType /*DEP30[*/ implements DartTypeNullity /*]*/ {
   /**
    * An empty list of types.
    */
@@ -2130,7 +2137,7 @@ class DefaultFieldFormalParameterElementImpl
  * A [ParameterElement] for parameters that have an initializer.
  */
 class DefaultParameterElementImpl extends ParameterElementImpl
-    with ConstVariableElement {
+    with ConstVariableElement /*DEP30[*/, DefaultParameterElementWithCalleeViewImpl /*]*/ {
   /**
    * The result of evaluating this variable's initializer.
    */
@@ -4993,6 +5000,10 @@ class FunctionTypeImpl extends TypeImpl implements FunctionType {
     // Note: visitedElements is only used for breaking recursion in the type
     // hierarchy; we don't use it when recursing into the function type.
 
+    //[DEP30(B.3.1.b) this is a function type and so it cannot be [Null];
+    // hence: this << ?U if this << U
+    if(type is UnionWithNullType) type = (type as UnionWithNullType).typeArgument;
+    //DEP30]
     // trivial base cases
     if (type == null) {
       return false;
@@ -5106,6 +5117,10 @@ class FunctionTypeImpl extends TypeImpl implements FunctionType {
 
   @override
   bool isSubtypeOf(DartType type) {
+    //[DEP30(B.3.1.b) this is a function type and so it cannot be [Null];
+    // hence: this <: ?U if this <: U
+    if(type is UnionWithNullType) type = (type as UnionWithNullType).typeArgument;
+    //DEP30]
     // trivial base cases
     if (type == null) {
       return false;
@@ -6246,7 +6261,8 @@ class InterfaceTypeImpl extends TypeImpl implements InterfaceType {
   }
 
   @override
-  bool get isObject => element.supertype == null;
+  bool get isObject => element.supertype == null
+              && element.name == "Object"; // DEP30(B.4.7): Null is root too now.
 
   @override
   List<MethodElement> get methods {
@@ -6422,6 +6438,9 @@ class InterfaceTypeImpl extends TypeImpl implements InterfaceType {
     if (this == type) {
       return true;
     }
+    if (type is UnionWithNullType) return type.invIsMoreSpecificThan(this); //DEP30(B.3.1)
+    if (type is NonNullType) return type.invIsMoreSpecificThan(this); //DEP30(B.3.2)
+    if (isNull && type is UnionWithNullType) return true; //DEP30(B.3.1): Null << ?U
     if (type is InterfaceType) {
       //
       // T is bottom. (This case is handled by the class BottomTypeImpl.)
@@ -9684,7 +9703,7 @@ abstract class TypeDefiningElement implements Element {
  * The abstract class `TypeImpl` implements the behavior common to objects
  * representing the declared type of elements in the element model.
  */
-abstract class TypeImpl implements DartType {
+abstract class TypeImpl /*DEP30[*/ extends TypeImplNullity /*]*/ implements DartType {
   /**
    * An empty list of types.
    */
@@ -9762,7 +9781,21 @@ abstract class TypeImpl implements DartType {
   bool isAssignableTo(DartType type) {
     // An interface type T may be assigned to a type S, written T <=> S, iff
     // either T <: S or S <: T.
+    /*[DEP30(B.3.5), was:
     return isSubtypeOf(type) || (type as TypeImpl).isSubtypeOf(this);
+    * But such a definition is too strong in the presence of union types, including
+    * Null | T. If the above condition is false, assignability can still hold for
+    * S = ?U types if U <: T (which we test for below); note T represents [this].
+    */
+
+    // Test the original assignability condition: T <: S || S <: T
+    if(isSubtypeOf(type) || (type as TypeImpl).isSubtypeOf(this)) return true;
+
+    // If the if condition above fails, and S is ?U then try the slightly more liberal 
+    // T == Null || U <: T. We know that T != Null otherwise T <: S would have
+    // been true. So test the other disjunct:
+    return type is UnionWithNullType && type.typeArgument.isSubtypeOf(this);
+    //DEP30]
   }
 
   /**
@@ -10026,9 +10059,11 @@ class TypeParameterTypeImpl extends TypeImpl implements TypeParameterType {
     //
     // T is a type parameter and S is Object.
     //
-    if (s.isObject) {
+    if (s.isObject && !isDEP30) { //DEP30(B.4.7): Object is not the class hierarchy top when isDEP30
       return true;
     }
+    if (s is UnionWithNullType && s.typeArgument.isObject) return true; //DEP30(B.4.7)
+    if (s is UnionWithNullType && this == s.typeArgument) return true; //DEP30(B.3.1.b)
     // We need upper bound to continue.
     if (bound == null) {
       return false;

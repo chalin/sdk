@@ -126,7 +126,7 @@ class ArgumentError extends Error {
   /** The invalid value. */
   final invalidValue;
   /** Name of the invalid argument, if available. */
-  final String name;
+  final /*?*/String name;
   /** Message describing the problem. */
   final message;
 
@@ -194,9 +194,9 @@ class ArgumentError extends Error {
  */
 class RangeError extends ArgumentError {
   /** The minimum value that [value] is allowed to assume. */
-  final num start;
+  final /*?*/num start;
   /** The maximum value that [value] is allowed to assume. */
-  final num end;
+  final /*?*/num end;
 
   // TODO(lrn): This constructor should be called only with string values.
   // It currently isn't in all cases.
@@ -232,7 +232,7 @@ class RangeError extends ArgumentError {
    * invalid value, and the [message] can override the default error
    * description.
    */
-  RangeError.range(num invalidValue, int minValue, int maxValue,
+  RangeError.range(num invalidValue, int minValue, /*?*/int maxValue,
                    [String name, String message])
       : start = minValue,
         end = maxValue,
@@ -252,7 +252,7 @@ class RangeError extends ArgumentError {
    */
   factory RangeError.index(int index, indexable,
                            [String name,
-                            String message,
+                            @nullable String message,
                             int length]) = IndexError;
 
   /**
@@ -280,8 +280,8 @@ class RangeError extends ArgumentError {
    * otherwise the length is found as `indexable.length`.
    */
   static void checkValidIndex(int index, var indexable,
-                              [String name, int length, String message]) {
-    if (length == null) length = indexable.length;
+                              [String name, int _length, String message]) { //DEP30, was: int length
+    int length = _length == null ? indexable.length : _length; //DEP30, was: if (length == null) length = indexable.length;
     // Comparing with `0` as receiver produces better dart2js type inference.
     if (0 > index || index >= length) {
       if (name == null) name = "index";
@@ -305,7 +305,7 @@ class RangeError extends ArgumentError {
    * Returns the actual `end` value, which is `length` if `end` is `null`,
    * and `end` otherwise.
    */
-  static int checkValidRange(int start, int end, int length,
+  static int checkValidRange(int start, /*?*/int end, int length,
                               [String startName, String endName,
                                String message]) {
     // Comparing with `0` as receiver produces better dart2js type inference.
@@ -461,7 +461,7 @@ class NoSuchMethodError extends Error {
                     Symbol memberName,
                     List positionalArguments,
                     Map<Symbol ,dynamic> namedArguments,
-                    [List existingArgumentNames = null])
+                    [List existingArgumentNames]) //DEP30, was: = null
       : _receiver = receiver,
         _memberName = memberName,
         _arguments = positionalArguments,
@@ -544,7 +544,7 @@ class OutOfMemoryError implements Error {
   const OutOfMemoryError();
   String toString() => "Out of Memory";
 
-  StackTrace get stackTrace => null;
+  @nullable StackTrace get stackTrace => null;
 }
 
 
@@ -552,7 +552,7 @@ class StackOverflowError implements Error {
   const StackOverflowError();
   String toString() => "Stack Overflow";
 
-  StackTrace get stackTrace => null;
+  @nullable StackTrace get stackTrace => null;
 }
 
 /**

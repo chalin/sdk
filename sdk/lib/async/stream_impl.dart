@@ -106,7 +106,7 @@ class _BufferingStreamSubscription<T> implements StreamSubscription<T>,
    *
    * Is created when necessary, or set in constructor for preconfigured events.
    */
-  _PendingEvents _pending;
+  @nullable _PendingEvents _pending;
 
   _BufferingStreamSubscription(void onData(T data),
                                Function onError,
@@ -149,17 +149,17 @@ class _BufferingStreamSubscription<T> implements StreamSubscription<T>,
 
   // StreamSubscription interface.
 
-  void onData(void handleData(T event)) {
+  void onData(void /*?*/handleData(T event)) {
     if (handleData == null) handleData = _nullDataHandler;
     _onData = _zone.registerUnaryCallback(handleData);
   }
 
-  void onError(Function handleError) {
+  void onError(@nullable Function handleError) {
     if (handleError == null) handleError = _nullErrorHandler;
     _onError = _registerErrorHandler(handleError, _zone);
   }
 
-  void onDone(void handleDone()) {
+  void onDone(void /*?*/handleDone()) {
     if (handleDone == null) handleDone = _nullDoneHandler;
     _onDone = _zone.registerCallback(handleDone);
   }
@@ -305,7 +305,7 @@ class _BufferingStreamSubscription<T> implements StreamSubscription<T>,
     assert(!_isInputPaused);
   }
 
-  Future _onCancel() {
+  @nullable Future _onCancel() {
     assert(_isCanceled);
     return null;
   }
@@ -522,7 +522,7 @@ class _GeneratedStreamImpl<T> extends _StreamImpl<T> {
 class _IterablePendingEvents<T> extends _PendingEvents {
   // The iterator providing data for data events.
   // Set to null when iteration has completed.
-  Iterator<T> _iterator;
+  @nullable Iterator<T> _iterator;
 
   _IterablePendingEvents(Iterable<T> data) : _iterator = data.iterator;
 
@@ -582,7 +582,7 @@ void _nullDoneHandler() {}
 /** A delayed event on a buffering stream subscription. */
 abstract class _DelayedEvent {
   /** Added as a linked list on the [StreamController]. */
-  _DelayedEvent next;
+  @nullable _DelayedEvent next;
   /** Execute the delayed event on the [StreamController]. */
   void perform(_EventDispatch dispatch);
 }
@@ -614,7 +614,7 @@ class _DelayedDone implements _DelayedEvent {
     dispatch._sendDone();
   }
 
-  _DelayedEvent get next => null;
+  @nullable _DelayedEvent get next => null;
 
   void set next(_DelayedEvent _) {
     throw new StateError("No events after a done.");
@@ -687,9 +687,9 @@ abstract class _PendingEvents {
 /** Class holding pending events for a [_StreamImpl]. */
 class _StreamImplEvents extends _PendingEvents {
   /// Single linked list of [_DelayedEvent] objects.
-  _DelayedEvent firstPendingEvent = null;
+  @nullable _DelayedEvent firstPendingEvent = null;
   /// Last element in the list of pending events. New events are added after it.
-  _DelayedEvent lastPendingEvent = null;
+  @nullable _DelayedEvent lastPendingEvent = null;
 
   bool get isEmpty => lastPendingEvent == null;
 
@@ -782,7 +782,7 @@ class _DoneStreamSubscription<T> implements StreamSubscription<T> {
     }
   }
 
-  Future cancel() => null;
+  @nullable Future cancel() => null;
 
   Future asFuture([futureValue]) {
     _Future result = new _Future();
@@ -804,8 +804,8 @@ class _AsBroadcastStream<T> extends Stream<T> {
   final _broadcastCallback _onCancelHandler;
   final Zone _zone;
 
-  _AsBroadcastStreamController<T> _controller;
-  StreamSubscription<T> _subscription;
+  @nullable _AsBroadcastStreamController<T> _controller;
+  @nullable StreamSubscription<T> _subscription;
 
   _AsBroadcastStream(this._source,
                      void onListenHandler(StreamSubscription subscription),
@@ -912,7 +912,7 @@ class _BroadcastSubscriptionWrapper<T> implements StreamSubscription<T> {
     _stream._resumeSubscription();
   }
 
-  Future cancel() {
+  @nullable Future cancel() {
     _stream._cancelSubscription();
     return null;
   }
@@ -960,12 +960,12 @@ class _StreamIteratorImpl<T> implements StreamIterator<T> {
   static const int _STATE_EXTRA_DONE = 5;
 
   /// Subscription being listened to.
-  StreamSubscription _subscription;
+  @nullable StreamSubscription _subscription;
 
   /// The current element represented by the most recent call to moveNext.
   ///
   /// Is null between the time moveNext is called and its future completes.
-  T _current = null;
+  @nullable T _current = null;
 
   /// The future returned by the most recent call to [moveNext].
   ///
@@ -1027,7 +1027,7 @@ class _StreamIteratorImpl<T> implements StreamIterator<T> {
     _state = _STATE_DONE;
   }
 
-  Future cancel() {
+  @nullable Future cancel() {
     StreamSubscription subscription = _subscription;
     if (subscription == null) return null;
     if (_state == _STATE_MOVING) {

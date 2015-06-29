@@ -56,7 +56,7 @@ abstract class _RectangleBase<T extends num> {
    * Returns the intersection of this and `other`, or `null` if they don't
    * intersect.
    */
-  Rectangle<T> intersection(Rectangle<T> other) {
+  @nullable Rectangle<T> intersection(Rectangle<T> other) {
     var x0 = max(left, other.left);
     var x1 = min(left + width, other.left + other.width);
 

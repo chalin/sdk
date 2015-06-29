@@ -148,7 +148,7 @@ class Uri {
   /**
    * Cache the computed return value of [queryParameters].
    */
-  Map<String, String> _queryParameters;
+  @nullable Map<String, String> _queryParameters;
 
   /**
    * Creates a new `Uri` object by parsing a URI string.
@@ -160,7 +160,7 @@ class Uri {
    * invalid characters will be percent escaped where possible.
    * The resulting `Uri` will represent a valid URI or URI reference.
    */
-  static Uri parse(String uri, [int start = 0, int end]) {
+  static Uri parse(String uri, [int start = 0, int _end]) { //DEP30, was: int end
     // This parsing will not validate percent-encoding, IPv6, etc. When done
     // it will call `new Uri(...)` which will perform these validations.
     // This is purely splitting up the URI string into components.
@@ -221,12 +221,12 @@ class Uri {
 
     String scheme = "";
     String userinfo = "";
-    String host = null;
-    int port = null;
-    String path = null;
-    String query = null;
-    String fragment = null;
-    if (end == null) end = uri.length;
+    /*?*/String host = null;
+    /*?*/int port = null;
+    /*?*/String path = null;
+    /*?*/String query = null;
+    /*?*/String fragment = null;
+    int end = _end == null ? uri.length : _end; //DEP30, was: if (end == null) end = uri.length;
 
     int index = start;
     int pathStart = start;
@@ -1044,7 +1044,7 @@ class Uri {
     return this.replace(path: path);
   }
 
-  static int _makePort(int port, String scheme) {
+  static /*?*/int _makePort(@nullable int port, String scheme) {
     // Perform scheme specific normalization.
     if (port != null && port == _defaultPort(scheme)) return null;
     return port;
@@ -1061,7 +1061,7 @@ class Uri {
    * This escapes all characters not valid in a reg-name,
    * and converts all non-escape upper-case letters to lower-case.
    */
-  static String _makeHost(String host, int start, int end, bool strictIPv6) {
+  static /*?*/String _makeHost(String host, int start, int end, bool strictIPv6) {
     // TODO(lrn): Should we normalize IPv6 addresses according to RFC 5952?
     if (host == null) return null;
     if (start == end) return "";
@@ -1199,8 +1199,8 @@ class Uri {
     return _normalize(userInfo, start, end, _userinfoTable);
   }
 
-  static String _makePath(String path, int start, int end,
-                          Iterable<String> pathSegments,
+  static String _makePath(@nullable String path, int start, int end,
+                          @nullable Iterable<String> pathSegments,
                           bool ensureLeadingSlash,
                           bool isFile) {
     if (path == null && pathSegments == null) return isFile ? "/" : "";
@@ -1222,8 +1222,8 @@ class Uri {
     return result;
   }
 
-  static String _makeQuery(String query, int start, int end,
-                           Map<String, String> queryParameters) {
+  static /*?*/String _makeQuery(@nullable String query, int start, int end,
+                           @nullable Map<String, String> queryParameters) {
     if (query == null && queryParameters == null) return null;
     if (query != null && queryParameters != null) {
       throw new ArgumentError('Both query and queryParameters specified');
@@ -1246,7 +1246,7 @@ class Uri {
     return result.toString();
   }
 
-  static String _makeFragment(String fragment, int start, int end) {
+  static /*?*/String _makeFragment(String fragment, int start, int end) {
     if (fragment == null) return null;
     return _normalize(fragment, start, end, _queryCharTable);
   }
@@ -1279,7 +1279,7 @@ class Uri {
    *
    * If [lowerCase] is true, a single character returned is always lower case,
    */
-  static String _normalizeEscape(String source, int index, bool lowerCase) {
+  static /*?*/String _normalizeEscape(String source, int index, bool lowerCase) {
     assert(source.codeUnitAt(index) == _PERCENT);
     if (index + 2 >= source.length) {
       return "%";  // Marks the escape as invalid.
@@ -1994,8 +1994,8 @@ class Uri {
    *  * ::FFFF:129.144.52.38
    *  * 2010:836B:4179::836B:4179
    */
-  static List<int> parseIPv6Address(String host, [int start = 0, int end]) {
-    if (end == null) end = host.length;
+  static List<int> parseIPv6Address(String host, [int start = 0, int _end]) { //DEP30, was: int end
+    int end = _end == null ? host.length : _end; //DEP30, was: if (end == null) end = host.length;
     // An IPv6 address consists of exactly 8 parts of 1-4 hex digits, seperated
     // by `:`'s, with the following exceptions:
     //

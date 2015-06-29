@@ -31,11 +31,11 @@ abstract class SetMixin<E> implements Set<E> {
 
   bool add(E element);
 
-  bool contains(Object element);
+  bool contains(/*?*/Object element);
 
   E lookup(E element);
 
-  bool remove(Object element);
+  bool remove(/*?*/Object element);
 
   Iterator<E> get iterator;
 
@@ -55,15 +55,15 @@ abstract class SetMixin<E> implements Set<E> {
     for (E element in elements) add(element);
   }
 
-  void removeAll(Iterable<Object> elements) {
-    for (Object element in elements) remove(element);
+  void removeAll(Iterable</*?*/Object> elements) {
+    for (/*?*/Object element in elements) remove(element);
   }
 
-  void retainAll(Iterable<Object> elements) {
+  void retainAll(Iterable</*?*/Object> elements) {
     // Create a copy of the set, remove all of elements from the copy,
     // then remove all remaining elements in copy from this.
     Set<E> toRemove = toSet();
-    for (Object o in elements) {
+    for (/*?*/Object o in elements) {
       toRemove.remove(o);
     }
     removeAll(toRemove);
@@ -85,8 +85,8 @@ abstract class SetMixin<E> implements Set<E> {
     removeAll(toRemove);
   }
 
-  bool containsAll(Iterable<Object> other) {
-    for (Object o in other) {
+  bool containsAll(Iterable</*?*/Object> other) {
+    for (/*?*/Object o in other) {
       if (!contains(o)) return false;
     }
     return true;
@@ -96,7 +96,7 @@ abstract class SetMixin<E> implements Set<E> {
     return toSet()..addAll(other);
   }
 
-  Set<E> intersection(Set<Object> other) {
+  Set<E> intersection(Set</*?*/Object> other) {
     Set<E> result = toSet();
     for (E element in this) {
       if (!other.contains(element)) result.remove(element);
@@ -104,7 +104,7 @@ abstract class SetMixin<E> implements Set<E> {
     return result;
   }
 
-  Set<E> difference(Set<Object> other) {
+  Set<E> difference(Set</*?*/Object> other) {
     Set<E> result = toSet();
     for (E element in this) {
       if (other.contains(element)) result.remove(element);
@@ -241,7 +241,7 @@ abstract class SetMixin<E> implements Set<E> {
   }
 
   E lastWhere(bool test(E value), { E orElse() }) {
-    E result = null;
+    /*?*/E result = null;
     bool foundMatching = false;
     for (E element in this) {
       if (test(element)) {
@@ -255,7 +255,7 @@ abstract class SetMixin<E> implements Set<E> {
   }
 
   E singleWhere(bool test(E value)) {
-    E result = null;
+    /*?*/E result = null;
     bool foundMatching = false;
     for (E element in this) {
       if (test(element)) {

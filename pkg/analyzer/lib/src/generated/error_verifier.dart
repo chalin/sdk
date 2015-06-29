@@ -20,12 +20,13 @@ import 'resolver.dart';
 import 'scanner.dart' as sc;
 import 'sdk.dart' show DartSdk, SdkLibrary;
 import 'utilities_dart.dart';
+part '../nullity/error_verifier_part.dart'; //DEP30
 
 /**
  * A visitor used to traverse an AST structure looking for additional errors and
  * warnings not covered by the parser and resolver.
  */
-class ErrorVerifier extends RecursiveAstVisitor<Object> {
+class ErrorVerifier extends RecursiveAstVisitor<Object> /*DEP30[*/ with ErrorVerifierNullityMixin /*]*/{
   /**
    * Static final string with value `"getter "` used in the construction of the
    * [StaticWarningCode.NON_ABSTRACT_CLASS_INHERITS_ABSTRACT_MEMBER_ONE], and
@@ -271,6 +272,7 @@ class ErrorVerifier extends RecursiveAstVisitor<Object> {
     _boolType = _typeProvider.boolType;
     _intType = _typeProvider.intType;
     _DISALLOWED_TYPES_TO_EXTEND_OR_IMPLEMENT = _typeProvider.nonSubtypableTypes;
+    _enableNonNullTypes = _currentLibrary.context.analysisOptions.enableNonNullTypes;
   }
 
   @override
@@ -517,6 +519,7 @@ class ErrorVerifier extends RecursiveAstVisitor<Object> {
       _checkForConstConstructorWithNonConstSuper(node);
       _checkForConflictingConstructorNameAndMember(node, constructorElement);
       _checkForAllFinalInitializedErrorCodes(node);
+      _checkForAllNonNullInitializedErrorCodes0(node); //DEP30(B.3.4.c)
       _checkForRedirectingConstructorErrorCodes(node);
       _checkForMultipleSuperInitializers(node);
       _checkForRecursiveConstructorRedirect(node, constructorElement);
@@ -1006,6 +1009,7 @@ class ErrorVerifier extends RecursiveAstVisitor<Object> {
   @override
   Object visitTopLevelVariableDeclaration(TopLevelVariableDeclaration node) {
     _checkForFinalNotInitialized(node.variables);
+    _checkForNonNullVarNotInitialized0(node.variables);
     return super.visitTopLevelVariableDeclaration(node);
   }
 
@@ -3328,7 +3332,9 @@ class ErrorVerifier extends RecursiveAstVisitor<Object> {
     bool foundError = false;
     for (ClassMember classMember in classMembers) {
       if (classMember is FieldDeclaration &&
-          _checkForFinalNotInitialized(classMember.fields)) {
+          _checkForFinalNotInitialized(classMember.fields) //[DEP30(B.3.4.c)
+          && !declaration.isAbstract
+          && _checkForNonNullVarNotInitialized0(classMember.fields)/*DEP30]*/) {
         foundError = true;
       }
     }
@@ -3733,18 +3739,23 @@ class ErrorVerifier extends RecursiveAstVisitor<Object> {
    *
    * See [StaticTypeWarningCode.INVALID_ASSIGNMENT].
    */
-  bool _checkForInvalidAssignment(Expression lhs, Expression rhs) {
-    if (lhs == null || rhs == null) {
+  bool _checkForInvalidAssignment(Expression lhs, Expression rhs /*[DEP30(B.3.4): NO LONGER USED but leaving in for now*/
+                                  , [bool interpretNullRhsAsNullLiteral = false] /*DEP30]*/) {
+    if (lhs == null || rhs == null /*DEP30(B.3.4)[*/ && !interpretNullRhsAsNullLiteral /*]*/) {
       return false;
     }
     VariableElement leftVariableElement = getVariableElement(lhs);
     DartType leftType = (leftVariableElement == null)
         ? getStaticType(lhs)
         : leftVariableElement.type;
-    DartType staticRightType = getStaticType(rhs);
+    DartType staticRightType = //[DEP30(B.3.4)
+        rhs == null ? _typeProvider.nullType : //DEP30]
+        getStaticType(rhs);
     if (!staticRightType.isAssignableTo(leftType)) {
       _errorReporter.reportTypeErrorForNode(
-          StaticTypeWarningCode.INVALID_ASSIGNMENT, rhs, [
+          StaticTypeWarningCode.INVALID_ASSIGNMENT, //[DEP30(B.3.4)
+          rhs == null ? lhs : //DEP30]
+          rhs, [
         staticRightType,
         leftType
       ]);
@@ -4938,7 +4949,9 @@ class ErrorVerifier extends RecursiveAstVisitor<Object> {
     if (expectedReturnType.isVoid) {
       if (staticReturnType.isVoid ||
           staticReturnType.isDynamic ||
-          staticReturnType.isBottom) {
+          staticReturnType.isBottom /*[DEP30(A.2.2)*/
+          || isDEP30 && staticReturnType.isNull
+          /*DEP30]*/) {
         return false;
       }
       _errorReporter.reportTypeErrorForNode(

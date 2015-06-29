@@ -42,7 +42,7 @@ abstract class num implements Comparable<num> {
    * Use [compareTo] for a comparison that distinguishes zero and minus zero,
    * and that considers NaN values as equal.
    */
-  bool operator==(Object other);
+  bool operator==(/*?*/Object other);
 
   /**
    * Returns a hash code for a numerical value.
@@ -436,10 +436,10 @@ abstract class num implements Comparable<num> {
    * `identical(n, num.parse(n.toString()))` (except when `n` is a NaN `double`
    * with a payload).
    */
-  static num parse(String input, [num onError(String input)]) {
+  static /*?*/num parse(String input, [/*?*/num onError(String input)]) {
     String source = input.trim();
     // TODO(lrn): Optimize to detect format and result type in one check.
-    num result = int.parse(source, onError: _returnNull);
+    /*@nullable num*/var result = int.parse(source, onError: _returnNull); //DEP30, was: num. https://github.com/dart-lang/sdk/issues/23736
     if (result != null) return result;
     result = double.parse(source, _returnNull);
     if (result != null) return result;

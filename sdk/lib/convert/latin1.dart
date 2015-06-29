@@ -111,7 +111,7 @@ class Latin1Decoder extends _UnicodeSubsetDecoder {
 }
 
 class _Latin1DecoderSink extends ByteConversionSinkBase {
-  StringConversionSink _sink;
+  @nullable StringConversionSink _sink;
   _Latin1DecoderSink(this._sink);
 
   void close() {

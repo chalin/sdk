@@ -181,10 +181,10 @@ abstract class _UnicodeSubsetDecoder extends Converter<List<int>, String> {
    * If [start] and [end] are provided, only the sub-list of bytes from
    * `start` to `end` (`end` not inclusive) is used as input to the conversion.
    */
-  String convert(List<int> bytes, [int start = 0, int end]) {
+  String convert(List<int> bytes, [int start = 0, int _end]) { //DEP30, was: int end
     int byteCount = bytes.length;
-    RangeError.checkValidRange(start, end, byteCount);
-    if (end == null) end = byteCount;
+    RangeError.checkValidRange(start, _end, byteCount); //DEP30, was: _end
+    int end = _end == null ? byteCount : _end; //DEP30, was: if (end == null) end = byteCount;
 
     for (int i = start; i < end; i++) {
       int byte = bytes[i];

@@ -7,7 +7,7 @@ part of dart.core;
 /**
  * Check whether two references are to the same object.
  */
-external bool identical(Object a, Object b);
+external bool identical(/*?*/Object a, /*?*/Object b);
 
 /**
  * Returns the identity hash code of `object`.
@@ -18,4 +18,4 @@ external bool identical(Object a, Object b);
  *
  * This hash code is compatible with [identical].
  */
-external int identityHashCode(Object object);
+external int identityHashCode(/*?*/Object object);

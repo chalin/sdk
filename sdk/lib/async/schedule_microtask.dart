@@ -9,14 +9,14 @@ typedef void _AsyncCallback();
 class _AsyncCallbackEntry {
   final _AsyncCallback callback;
   final Zone zone;
-  _AsyncCallbackEntry next;
+  @nullable _AsyncCallbackEntry next;
   _AsyncCallbackEntry(this.callback, this.zone);
 }
 
 /** Head of single linked list of pending callbacks. */
-_AsyncCallbackEntry _nextCallback;
+@nullable _AsyncCallbackEntry _nextCallback;
 /** Tail of single linked list of pending callbacks. */
-_AsyncCallbackEntry _lastCallback;
+@nullable _AsyncCallbackEntry _lastCallback;
 /**
  * Tail of priority callbacks added by the currently executing callback.
  *
@@ -24,7 +24,7 @@ _AsyncCallbackEntry _lastCallback;
  * callback queue, so that if one callback schedules more than one
  * priority callback, they are still enqueued in scheduling order.
  */
-_AsyncCallbackEntry _lastPriorityCallback;
+@nullable _AsyncCallbackEntry _lastPriorityCallback;
 /**
  * Whether we are currently inside the callback loop.
  *

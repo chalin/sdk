@@ -306,7 +306,7 @@ abstract class _StreamControllerLifecycle<T> {
       bool cancelOnError);
   void _recordPause(StreamSubscription<T> subscription) {}
   void _recordResume(StreamSubscription<T> subscription) {}
-  Future _recordCancel(StreamSubscription<T> subscription) => null;
+  @nullable Future _recordCancel(StreamSubscription<T> subscription) => null;
 }
 
 /**
@@ -381,7 +381,7 @@ abstract class _StreamController<T> implements StreamController<T>,
   // TODO(lrn): Could this be stored in the varData field too, if it's not
   // accessed until the call to "close"? Then we need to special case if it's
   // accessed earlier, or if close is called before subscribing.
-  _Future _doneFuture;
+  @nullable _Future _doneFuture;
 
   _StreamController();
 
@@ -749,10 +749,10 @@ class _SyncStreamController<T> extends _StreamController<T>
 }
 
 abstract class _NoCallbacks {
-  _NotificationHandler get _onListen => null;
-  _NotificationHandler get _onPause => null;
-  _NotificationHandler get _onResume => null;
-  _NotificationHandler get _onCancel => null;
+  @nullable _NotificationHandler get _onListen => null;
+  @nullable _NotificationHandler get _onPause => null;
+  @nullable _NotificationHandler get _onResume => null;
+  @nullable _NotificationHandler get _onCancel => null;
 }
 
 class _NoCallbackAsyncStreamController<T> = _StreamController<T>
@@ -763,7 +763,7 @@ class _NoCallbackSyncStreamController<T> = _StreamController<T>
 
 typedef _NotificationHandler();
 
-Future _runGuarded(_NotificationHandler notificationHandler) {
+@nullable Future _runGuarded(@nullable _NotificationHandler notificationHandler) {
   if (notificationHandler == null) return null;
   try {
     var result = notificationHandler();
@@ -876,7 +876,7 @@ class _AddStreamState<T> {
    *
    * Return a future if the cancel takes time, otherwise return `null`.
    */
-  Future cancel() {
+  @nullable Future cancel() {
     var cancel = addSubscription.cancel();
     if (cancel == null) {
       addStreamFuture._asyncComplete(null);

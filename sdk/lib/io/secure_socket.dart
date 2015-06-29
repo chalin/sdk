@@ -721,12 +721,12 @@ class _RawSecureSocket extends Stream<RawSocketEvent>
 
   static void _verifyFields(host,
                             int requestedPort,
-                            String certificateName,
+                            @nullable String certificateName,
                             bool is_server,
                             bool requestClientCertificate,
                             bool requireClientCertificate,
                             bool sendClientCertificate,
-                            Function onBadCertificate) {
+                            @nullable Function onBadCertificate) {
     if (host is! String && host is! InternetAddress) {
       throw new ArgumentError("host is not a String or an InternetAddress");
     }

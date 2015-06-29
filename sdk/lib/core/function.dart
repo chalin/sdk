@@ -34,7 +34,7 @@ abstract class Function {
    * If [namedArguments] is omitted or null, it is considered an empty map.
    */
   external static apply(Function function,
-                        List positionalArguments,
+                        /*?*/List positionalArguments,
                         [Map<Symbol, dynamic> namedArguments]);
 
   /**
@@ -63,5 +63,5 @@ abstract class Function {
    * Classes implementing `Function` by having a `call` method should have their
    * own `operator==` and `hashCode` depending on the object.
    */
-  bool operator==(Object other);
+  bool operator==(/*?*/Object other);
 }

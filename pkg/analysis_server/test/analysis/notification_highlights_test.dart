@@ -129,6 +129,16 @@ const AAA = 42;
     });
   }
 
+  test_nullable_ANNOTATION_DEP30() {
+    addTestFile('''
+@nullable main() {}
+''');
+    return prepareHighlights().then((_) {
+      assertHasRegion(HighlightRegionType.ANNOTATION, '@nullable', '@nullable'.length);
+      // assertHasRegion(HighlightRegionType.ANNOTATION, ') main', ')'.length);
+    });
+  }
+
   test_BUILT_IN_abstract() {
     addTestFile('''
 abstract class A {};

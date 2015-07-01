@@ -81,4 +81,21 @@ main() {
       expect(error.type, AnalysisErrorType.STATIC_WARNING);
     });
   }
+
+  test_StaticWarning_DEP30() {
+    createProject();
+    addTestFile('''
+main() {
+  @nullable int i = null;
+  int j = i; j == j;
+}
+''');
+    return waitForTasksFinished().then((_) {
+      List<AnalysisError> errors = filesErrors[testFile];
+      expect(errors, hasLength(1));
+      AnalysisError error = errors[0];
+      expect(error.severity, AnalysisErrorSeverity.WARNING);
+      expect(error.type, AnalysisErrorType.STATIC_TYPE_WARNING);
+    });
+  }
 }

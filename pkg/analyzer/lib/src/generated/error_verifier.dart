@@ -424,6 +424,7 @@ class ErrorVerifier extends RecursiveAstVisitor<Object> /*DEP30[*/ with ErrorVer
           _checkForConflictingInstanceGetterAndSuperclassMember();
           _checkImplementsSuperClass(node);
           _checkImplementsFunctionWithoutCall(node);
+          _checkForMixinHasNoConstructors(node);
         }
       }
       visitClassDeclarationIncrementally(node);
@@ -476,6 +477,7 @@ class ErrorVerifier extends RecursiveAstVisitor<Object> /*DEP30[*/ with ErrorVer
         _checkForImplementsDeferredClass(implementsClause);
         _checkForRecursiveInterfaceInheritance(_enclosingClass);
         _checkForNonAbstractClassInheritsAbstractMember(node.name);
+        _checkForMixinHasNoConstructors(node);
       }
     } finally {
       _enclosingClass = outerClassElement;
@@ -4176,6 +4178,18 @@ class ErrorVerifier extends RecursiveAstVisitor<Object> /*DEP30[*/ with ErrorVer
   }
 
   /**
+   * Report the error [CompileTimeErrorCode.MIXIN_HAS_NO_CONSTRUCTORS] if
+   * appropriate.
+   */
+  void _checkForMixinHasNoConstructors(AstNode node) {
+    if ((_enclosingClass as ClassElementImpl).doesMixinLackConstructors) {
+      ErrorCode errorCode = CompileTimeErrorCode.MIXIN_HAS_NO_CONSTRUCTORS;
+      _errorReporter.reportErrorForNode(
+          errorCode, node, [_enclosingClass.supertype]);
+    }
+  }
+
+  /**
    * Verify that the given mixin has the 'Object' superclass. The [mixinName] is
    * the node to report problem on. The [mixinElement] is the mixing to
    * evaluate.
@@ -4301,7 +4315,7 @@ class ErrorVerifier extends RecursiveAstVisitor<Object> /*DEP30[*/ with ErrorVer
       ClassDeclaration declaration) {
     // do nothing if mixin errors have already been reported for this class.
     ClassElementImpl enclosingClass = _enclosingClass;
-    if (enclosingClass.mixinErrorsReported) {
+    if (enclosingClass.doesMixinLackConstructors) {
       return false;
     }
     // do nothing if there is explicit constructor
@@ -5196,7 +5210,7 @@ class ErrorVerifier extends RecursiveAstVisitor<Object> /*DEP30[*/ with ErrorVer
     }
     // do nothing if mixin errors have already been reported for this class.
     ClassElementImpl enclosingClass = _enclosingClass;
-    if (enclosingClass.mixinErrorsReported) {
+    if (enclosingClass.doesMixinLackConstructors) {
       return false;
     }
     //

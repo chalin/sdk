@@ -2,7 +2,7 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-import 'optimizers.dart' show Pass, ParentVisitor;
+import 'optimizers.dart';
 
 import '../constants/constant_system.dart';
 import '../resolution/operators.dart';
@@ -17,6 +17,8 @@ import '../elements/elements.dart';
 import '../dart2jslib.dart' show ClassWorld, World;
 import '../universe/universe.dart';
 import '../js_backend/js_backend.dart' show JavaScriptBackend;
+import '../io/source_information.dart' show SourceInformation;
+import 'cps_fragment.dart';
 
 enum AbstractBool {
   True, False, Maybe, Nothing
@@ -25,6 +27,7 @@ enum AbstractBool {
 class TypeMaskSystem {
   final TypesTask inferrer;
   final World classWorld;
+  final JavaScriptBackend backend;
 
   TypeMask get dynamicType => inferrer.dynamicType;
   TypeMask get typeType => inferrer.typeType;
@@ -37,13 +40,15 @@ class TypeMaskSystem {
   TypeMask get listType => inferrer.listType;
   TypeMask get mapType => inferrer.mapType;
   TypeMask get nonNullType => inferrer.nonNullType;
+  TypeMask get mutableNativeListType => backend.mutableArrayType;
 
   TypeMask numStringBoolType;
 
   // TODO(karlklose): remove compiler here.
   TypeMaskSystem(dart2js.Compiler compiler)
     : inferrer = compiler.typesTask,
-      classWorld = compiler.world {
+      classWorld = compiler.world,
+      backend = compiler.backend {
     numStringBoolType =
       new TypeMask.unionOf(<TypeMask>[numType, stringType, boolType],
                            classWorld);
@@ -51,6 +56,10 @@ class TypeMaskSystem {
 
   Element locateSingleElement(TypeMask mask, Selector selector) {
     return mask.locateSingleElement(selector, mask, classWorld.compiler);
+  }
+
+  bool needsNoSuchMethodHandling(TypeMask mask, Selector selector) {
+    return mask.needsNoSuchMethodHandling(selector, classWorld);
   }
 
   TypeMask getReceiverType(MethodElement method) {
@@ -133,6 +142,26 @@ class TypeMaskSystem {
     return areDisjoint(t, doubleType);
   }
 
+  bool isDefinitelyInt(TypeMask t, {bool allowNull: false}) {
+    if (!allowNull && t.isNullable) return false;
+    return t.satisfies(backend.jsIntClass, classWorld);
+  }
+
+  bool isDefinitelyNativeList(TypeMask t, {bool allowNull: false}) {
+    if (!allowNull && t.isNullable) return false;
+    return t.satisfies(backend.jsArrayClass, classWorld);
+  }
+
+  bool isDefinitelyMutableNativeList(TypeMask t, {bool allowNull: false}) {
+    if (!allowNull && t.isNullable) return false;
+    return t.satisfies(backend.jsMutableArrayClass, classWorld);
+  }
+
+  bool isDefinitelyFixedNativeList(TypeMask t, {bool allowNull: false}) {
+    if (!allowNull && t.isNullable) return false;
+    return t.satisfies(backend.jsFixedArrayClass, classWorld);
+  }
+
   bool areDisjoint(TypeMask leftType, TypeMask rightType) {
     TypeMask intersection = leftType.intersection(rightType, classWorld);
     return intersection.isEmpty && !intersection.isNullable;
@@ -168,6 +197,15 @@ class TypeMaskSystem {
       return AbstractBool.Maybe;
     }
     // TODO(asgerf): Support function types, and what else might be missing.
+    return AbstractBool.Maybe;
+  }
+
+  /// Returns whether [type] is one of the falsy values: false, 0, -0, NaN,
+  /// the empty string, or null.
+  AbstractBool boolify(TypeMask type) {
+    if (isDefinitelyNotNumStringBool(type) && !type.isNullable) {
+      return AbstractBool.True;
+    }
     return AbstractBool.Maybe;
   }
 }
@@ -250,6 +288,32 @@ class ConstantPropagationLattice {
     return value.isNothing ||
       value.isConstant && !value.constant.isDouble ||
       typeSystem.isDefinitelyNotNonIntegerDouble(value.type);
+  }
+
+  bool isDefinitelyInt(AbstractValue value,
+                       {bool allowNull: false}) {
+    return value.isNothing ||
+        typeSystem.isDefinitelyInt(value.type, allowNull: allowNull);
+  }
+
+  bool isDefinitelyNativeList(AbstractValue value,
+                              {bool allowNull: false}) {
+    return value.isNothing ||
+        typeSystem.isDefinitelyNativeList(value.type, allowNull: allowNull);
+  }
+
+  bool isDefinitelyMutableNativeList(AbstractValue value,
+                                     {bool allowNull: false}) {
+    return value.isNothing ||
+         typeSystem.isDefinitelyMutableNativeList(value.type,
+                                                  allowNull: allowNull);
+  }
+
+  bool isDefinitelyFixedNativeList(AbstractValue value,
+                                   {bool allowNull: false}) {
+    return value.isNothing ||
+        typeSystem.isDefinitelyFixedNativeList(value.type,
+                                               allowNull: allowNull);
   }
 
   /// Returns whether the given [value] is an instance of [type].
@@ -344,7 +408,19 @@ class ConstantPropagationLattice {
       if (result == null) return anything;
       return constant(result);
     }
-    return null; // TODO(asgerf): Look up type?
+    // TODO(asgerf): Handle remaining operators and the UIntXX types.
+    switch (operator.kind) {
+      case BinaryOperatorKind.ADD:
+      case BinaryOperatorKind.SUB:
+      case BinaryOperatorKind.MUL:
+        if (isDefinitelyInt(left) && isDefinitelyInt(right)) {
+          return nonConstant(typeSystem.intType);
+        }
+        return null;
+
+      default:
+        return null; // The caller will use return type from type inference.
+    }
   }
 
   AbstractValue stringConstant(String value) {
@@ -365,6 +441,21 @@ class ConstantPropagationLattice {
     } else {
       return nonConstant(typeSystem.stringType);
     }
+  }
+
+  /// Returns whether [value] is one of the falsy values: false, 0, -0, NaN,
+  /// the empty string, or null.
+  AbstractBool boolify(AbstractValue value) {
+    if (value.isNothing) return AbstractBool.Nothing;
+    if (value.isConstant) {
+      ConstantValue constantValue = value.constant;
+      if (isFalsyConstant(constantValue)) {
+        return AbstractBool.False;
+      } else {
+        return AbstractBool.True;
+      }
+    }
+    return typeSystem.boolify(value.type);
   }
 
   /// The possible return types of a method that may be targeted by
@@ -426,8 +517,7 @@ class TypePropagator extends Pass {
     TransformingVisitor transformer = new TransformingVisitor(
         _compiler,
         _lattice,
-        analyzer.reachableNodes,
-        analyzer.values,
+        analyzer,
         replacements,
         _internalError);
     transformer.transform(root);
@@ -455,8 +545,7 @@ final Map<String, BuiltinOperator> NumBinaryBuiltins =
  * actual transformations on the CPS graph.
  */
 class TransformingVisitor extends RecursiveVisitor {
-  final Set<Node> reachable;
-  final Map<Node, AbstractValue> values;
+  final TypePropagationVisitor analyzer;
   final Map<Expression, ConstantValue> replacements;
   final ConstantPropagationLattice lattice;
   final dart2js.Compiler compiler;
@@ -464,13 +553,14 @@ class TransformingVisitor extends RecursiveVisitor {
   JavaScriptBackend get backend => compiler.backend;
   TypeMaskSystem get typeSystem => lattice.typeSystem;
   types.DartTypes get dartTypes => lattice.dartTypes;
+  Set<Node> get reachable => analyzer.reachableNodes;
+  Map<Node, AbstractValue> get values => analyzer.values;
 
   final dart2js.InternalErrorFunction internalError;
 
   TransformingVisitor(this.compiler,
                       this.lattice,
-                      this.reachable,
-                      this.values,
+                      this.analyzer,
                       this.replacements,
                       this.internalError);
 
@@ -478,20 +568,58 @@ class TransformingVisitor extends RecursiveVisitor {
     visit(root);
   }
 
+  /// Sets parent pointers and computes types for the given subtree.
+  void reanalyze(Node node) {
+    new ParentVisitor().visit(node);
+    analyzer.reanalyzeSubtree(node);
+  }
+
   /// Removes the entire subtree of [node] and inserts [replacement].
-  /// All references in the [node] subtree are unlinked, and parent pointers
-  /// in [replacement] are initialized.
+  ///
+  /// By default, all references in the [node] subtree are unlinked, and parent
+  /// pointers in [replacement] are initialized and its types recomputed.
+  ///
+  /// If the caller needs to manually unlink the node, because some references
+  /// were adopted by other nodes, it can be disabled by passing `false`
+  /// as the [unlink] parameter.
   ///
   /// [replacement] must be "fresh", i.e. it must not contain significant parts
   /// of the original IR inside of it since the [ParentVisitor] will
   /// redundantly reprocess it.
-  void replaceSubtree(Expression node, Expression replacement) {
+  void replaceSubtree(Expression node, Expression replacement,
+                      {bool unlink: true}) {
     InteriorNode parent = node.parent;
     parent.body = replacement;
     replacement.parent = parent;
     node.parent = null;
-    RemovalVisitor.remove(node);
-    new ParentVisitor().visit(replacement);
+    if (unlink) {
+      RemovalVisitor.remove(node);
+    }
+    reanalyze(replacement);
+  }
+
+  /// Inserts [insertedCode] before [node].
+  /// 
+  /// [node] will end up in the hole of [insertedCode], and [insertedCode]
+  /// will become rooted where [node] was.
+  void insertBefore(Expression node, CpsFragment insertedCode) {
+    if (insertedCode.isEmpty) return; // Nothing to do.
+    assert(insertedCode.isOpen);
+    InteriorNode parent = node.parent;
+    InteriorNode context = insertedCode.context;
+
+    parent.body = insertedCode.root;
+    insertedCode.root.parent = parent;
+
+    // We want to recompute the types for [insertedCode] without
+    // traversing the entire subtree of [node]. Temporarily close the
+    // term with a dummy node while recomputing types.
+    context.body = new Unreachable(); 
+    new ParentVisitor().visit(insertedCode.root);
+    reanalyze(insertedCode.root);
+
+    context.body = node;
+    node.parent = context;
   }
 
   /// Make a constant primitive for [constant] and set its entry in [values].
@@ -525,7 +653,8 @@ class TransformingVisitor extends RecursiveVisitor {
   /// The new expression will be visited.
   ///
   /// Returns true if the node was replaced.
-  bool constifyExpression(Expression node, Continuation continuation) {
+  bool constifyExpression(Invoke node) {
+    Continuation continuation = node.continuation.definition;
     ConstantValue constant = replacements[node];
     if (constant == null) return false;
     Constant primitive = makeConstantPrimitive(constant);
@@ -542,50 +671,55 @@ class TransformingVisitor extends RecursiveVisitor {
   //
   // (Branch (IsTrue true) k0 k1) -> (InvokeContinuation k0)
   void visitBranch(Branch node) {
-    bool trueReachable  = reachable.contains(node.trueContinuation.definition);
-    bool falseReachable = reachable.contains(node.falseContinuation.definition);
-    bool bothReachable  = (trueReachable && falseReachable);
-    bool noneReachable  = !(trueReachable || falseReachable);
+    Continuation trueCont = node.trueContinuation.definition;
+    Continuation falseCont = node.falseContinuation.definition;
+    IsTrue conditionNode = node.condition;
+    Primitive condition = conditionNode.value.definition;
 
-    if (bothReachable || noneReachable) {
-      // Nothing to do, shrinking reductions take care of the unreachable case.
-      super.visitBranch(node);
+    AbstractValue conditionValue = getValue(condition);
+    AbstractBool boolifiedValue = lattice.boolify(conditionValue);
+
+    if (boolifiedValue == AbstractBool.True) {
+      InvokeContinuation invoke = new InvokeContinuation(trueCont, []);
+      replaceSubtree(node, invoke);
+      visitInvokeContinuation(invoke);
+      return;
+    }
+    if (boolifiedValue == AbstractBool.False) {
+      InvokeContinuation invoke = new InvokeContinuation(falseCont, []);
+      replaceSubtree(node, invoke);
+      visitInvokeContinuation(invoke);
       return;
     }
 
-    Continuation successor = (trueReachable) ?
-        node.trueContinuation.definition : node.falseContinuation.definition;
-
-    // Replace the branch by a continuation invocation.
-
-    assert(successor.parameters.isEmpty);
-    InvokeContinuation invoke =
-        new InvokeContinuation(successor, <Primitive>[]);
-
-    replaceSubtree(node, invoke);
-    visitInvokeContinuation(invoke);
-  }
-
-  /// True if the given reference is a use that converts its value to a boolean
-  /// and only uses the coerced value.
-  bool isBoolifyingUse(Reference<Primitive> ref) {
-    Node use = ref.parent;
-    return use is IsTrue ||
-      use is ApplyBuiltinOperator && use.operator == BuiltinOperator.IsFalsy;
-  }
-
-  /// True if all uses of [prim] only use its value after boolean conversion.
-  bool isAlwaysBoolified(Primitive prim) {
-    for (Reference ref = prim.firstRef; ref != null; ref = ref.next) {
-      if (!isBoolifyingUse(ref)) return false;
+    if (condition is ApplyBuiltinOperator && 
+        condition.operator == BuiltinOperator.LooseEq) {
+      Primitive leftArg = condition.arguments[0].definition;
+      Primitive rightArg = condition.arguments[1].definition;
+      AbstractValue left = getValue(leftArg);
+      AbstractValue right = getValue(rightArg);
+      if (right.isNullConstant && 
+          lattice.isDefinitelyNotNumStringBool(left)) {
+        // Rewrite:
+        //   if (x == null) S1 else S2
+        //     =>
+        //   if (x) S2 else S1   (note the swapped branches)
+        Branch branch = new Branch(new IsTrue(leftArg), falseCont, trueCont);
+        replaceSubtree(node, branch);
+        return;
+      } else if (left.isNullConstant && 
+                 lattice.isDefinitelyNotNumStringBool(right)) {
+        Branch branch = new Branch(new IsTrue(rightArg), falseCont, trueCont);
+        replaceSubtree(node, branch);
+        return;
+      }
     }
-    return true;
   }
 
   /// Replaces [node] with a more specialized instruction, if possible.
   ///
   /// Returns `true` if the node was replaced.
-  bool specializeInvoke(InvokeMethod node) {
+  bool specializeOperatorCall(InvokeMethod node) {
     Continuation cont = node.continuation.definition;
     bool replaceWithBinary(BuiltinOperator operator,
                            Primitive left,
@@ -596,15 +730,6 @@ class TransformingVisitor extends RecursiveVisitor {
       replaceSubtree(node, let);
       visitLetPrim(let);
       return true; // So returning early is more convenient.
-    }
-    bool replaceWithUnary(BuiltinOperator operator,
-                          Primitive argument) {
-      Primitive prim =
-          new ApplyBuiltinOperator(operator, <Primitive>[argument]);
-      LetPrim let = makeLetPrimInvoke(prim, cont);
-      replaceSubtree(node, let);
-      visitLetPrim(let);
-      return true;
     }
 
     if (node.selector.isOperator && node.arguments.length == 2) {
@@ -619,19 +744,6 @@ class TransformingVisitor extends RecursiveVisitor {
         // Equality is special due to its treatment of null values and the
         // fact that Dart-null corresponds to both JS-null and JS-undefined.
         // Please see documentation for IsFalsy, StrictEq, and LooseEq.
-        bool isBoolified = isAlwaysBoolified(cont.parameters.single);
-        // Comparison with null constants.
-        if (isBoolified &&
-            right.isNullConstant &&
-            lattice.isDefinitelyNotNumStringBool(left)) {
-          // TODO(asgerf): This is shorter but might confuse te VM? Evaluate.
-          return replaceWithUnary(BuiltinOperator.IsFalsy, leftArg);
-        }
-        if (isBoolified &&
-            left.isNullConstant &&
-            lattice.isDefinitelyNotNumStringBool(right)) {
-          return replaceWithUnary(BuiltinOperator.IsFalsy, rightArg);
-        }
         if (left.isNullConstant || right.isNullConstant) {
           return replaceWithBinary(BuiltinOperator.LooseEq, leftArg, rightArg);
         }
@@ -664,8 +776,10 @@ class TransformingVisitor extends RecursiveVisitor {
         }
         else if (lattice.isDefinitelyString(left, allowNull: false) &&
                  lattice.isDefinitelyString(right, allowNull: false)) {
-          return replaceWithBinary(BuiltinOperator.StringConcatenate,
-                                   leftArg, rightArg);
+          if (node.selector.name == '+') {
+            return replaceWithBinary(BuiltinOperator.StringConcatenate,
+                                     leftArg, rightArg);
+          }
         }
       }
     }
@@ -698,10 +812,9 @@ class TransformingVisitor extends RecursiveVisitor {
   /// invocation with a direct access to a field.
   ///
   /// Returns `true` if the node was replaced.
-  bool inlineFieldAccess(InvokeMethod node) {
+  bool specializeFieldAccess(InvokeMethod node) {
     if (!node.selector.isGetter && !node.selector.isSetter) return false;
     AbstractValue receiver = getValue(getDartReceiver(node));
-    if (receiver.isNothing) return false;
     Element target =
         typeSystem.locateSingleElement(receiver.type, node.selector);
     if (target is! FieldElement) return false;
@@ -711,7 +824,6 @@ class TransformingVisitor extends RecursiveVisitor {
     Continuation cont = node.continuation.definition;
     if (node.selector.isGetter) {
       GetField get = new GetField(getDartReceiver(node), target);
-      get.objectIsNotNull = receiver.isDefinitelyNotNull;
       LetPrim let = makeLetPrimInvoke(get, cont);
       replaceSubtree(node, let);
       visitLetPrim(let);
@@ -730,11 +842,474 @@ class TransformingVisitor extends RecursiveVisitor {
     }
   }
 
-  void visitInvokeMethod(InvokeMethod node) {
+  /// Create a check that throws if [index] is not a valid index on [list].
+  /// 
+  /// This function assumes that [index] is an integer.
+  ///
+  /// Returns a CPS fragment whose context is the branch where no error
+  /// was thrown.
+  CpsFragment makeBoundsCheck(Primitive list,
+                              Primitive index,
+                              SourceInformation sourceInfo) {
+    CpsFragment cps = new CpsFragment(sourceInfo);
+    Continuation fail = cps.letCont();
+    Primitive isTooSmall = cps.applyBuiltin(
+        BuiltinOperator.NumLt,
+        <Primitive>[index, cps.makeZero()]);
+    cps.ifTrue(isTooSmall).invokeContinuation(fail);
+    Primitive isTooLarge = cps.applyBuiltin(
+        BuiltinOperator.NumGe,
+        <Primitive>[index, cps.letPrim(new GetLength(list))]);
+    cps.ifTrue(isTooLarge).invokeContinuation(fail);
+    cps.insideContinuation(fail).invokeStaticThrower(
+        backend.getThrowIndexOutOfBoundsError(),
+        <Primitive>[list, index]);
+    return cps;
+  }
+
+  /// Create a check that throws if the length of [list] is not equal to
+  /// [originalLength].
+  ///
+  /// Returns a CPS fragment whose context is the branch where no error
+  /// was thrown.
+  CpsFragment makeConcurrentModificationCheck(Primitive list,
+                                              Primitive originalLength,
+                                              SourceInformation sourceInfo) {
+    CpsFragment cps = new CpsFragment(sourceInfo);
+    Primitive lengthChanged = cps.applyBuiltin(
+        BuiltinOperator.StrictNeq,
+        <Primitive>[originalLength, cps.letPrim(new GetLength(list))]);
+    cps.ifTrue(lengthChanged).invokeStaticThrower(
+        backend.getThrowConcurrentModificationError(),
+        <Primitive>[list]);
+    return cps;
+  }
+
+  /// Counts number of index accesses on [list] and determines based on
+  /// that number if we should try to inline them.
+  ///
+  /// This is a short-term solution to avoid inserting a lot of bounds checks,
+  /// since there is currently no optimization for eliminating them.
+  bool hasTooManyIndexAccesses(Primitive list) {
+    int count = 0;
+    for (Reference ref = list.firstRef; ref != null; ref = ref.next) {
+      Node use = ref.parent;
+      if (use is InvokeMethod && 
+          (use.selector.isIndex || use.selector.isIndexSet) &&
+          getDartReceiver(use) == list) {
+        ++count;
+      } else if (use is GetIndex && use.object.definition == list) {
+        ++count;
+      } else if (use is SetIndex && use.object.definition == list) {
+        ++count;
+      }
+      if (count > 2) return true;
+    }
+    return false;
+  }
+
+  /// Tries to replace [node] with one or more direct array access operations.
+  ///
+  /// Returns `true` if the node was replaced.
+  bool specializeArrayAccess(InvokeMethod node) {
+    Primitive list = getDartReceiver(node);
+    AbstractValue listValue = getValue(list);
+    // Ensure that the object is a native list or null.
+    if (!lattice.isDefinitelyNativeList(listValue, allowNull: true)) {
+      return false;
+    }
+    bool isFixedLength = 
+        lattice.isDefinitelyFixedNativeList(listValue, allowNull: true);
+    bool isMutable =
+        lattice.isDefinitelyMutableNativeList(listValue, allowNull: true);
+    SourceInformation sourceInfo = node.sourceInformation;
     Continuation cont = node.continuation.definition;
-    if (constifyExpression(node, cont)) return;
-    if (specializeInvoke(node)) return;
-    if (inlineFieldAccess(node)) return;
+    switch (node.selector.name) {
+      case 'length':
+        if (!node.selector.isGetter) return false;
+        CpsFragment cps = new CpsFragment(sourceInfo);
+        cps.invokeContinuation(cont, [cps.letPrim(new GetLength(list))]);
+        replaceSubtree(node, cps.result);
+        visit(cps.result);
+        return true;
+
+      case '[]':
+        if (listValue.isNullable) return false;
+        if (hasTooManyIndexAccesses(list)) return false;
+        Primitive index = getDartArgument(node, 0);
+        if (!lattice.isDefinitelyInt(getValue(index))) return false;
+        CpsFragment cps = makeBoundsCheck(list, index, sourceInfo);
+        GetIndex get = cps.letPrim(new GetIndex(list, index));
+        cps.invokeContinuation(cont, [get]);
+        replaceSubtree(node, cps.result);
+        visit(cps.result);
+        return true;
+
+      case '[]=':
+        if (listValue.isNullable) return false;
+        if (hasTooManyIndexAccesses(list)) return false;
+        Primitive index = getDartArgument(node, 0);
+        Primitive value = getDartArgument(node, 1);
+        if (!isMutable) return false;
+        if (!lattice.isDefinitelyInt(getValue(index))) return false;
+        CpsFragment cps = makeBoundsCheck(list, index, sourceInfo);
+        cps.letPrim(new SetIndex(list, index, value));
+        assert(cont.parameters.single.hasNoUses);
+        cont.parameters.clear();
+        cps.invokeContinuation(cont, []);
+        replaceSubtree(node, cps.result);
+        visit(cps.result);
+        return true;
+
+      case 'forEach':
+        if (!node.selector.isCall ||
+            node.selector.positionalArgumentCount != 1 ||
+            node.selector.namedArgumentCount != 0) {
+          return false;
+        }
+        Primitive callback = getDartArgument(node, 0);
+        // Rewrite to:
+        //   var originalLength = array.length, i = 0;
+        //   while (i < array.length) {
+        //     callback(array[i]);
+        //     if (array.length !== originalLength) throw;
+        //     i = i + 1;
+        //   }
+        CpsFragment cps = new CpsFragment(sourceInfo);
+        Primitive originalLength = cps.letPrim(new GetLength(list));
+        originalLength.hint = new OriginalLengthEntity();
+
+        // Build a loop.
+        Parameter loopIndex = new Parameter(new LoopIndexEntity());
+        Continuation loop = cps.beginLoop(
+            <Parameter>[loopIndex], [cps.makeZero()]);
+
+        // Check for loop exit.
+        Primitive loopCondition = cps.applyBuiltin(
+            BuiltinOperator.NumLt,
+            [loopIndex, cps.letPrim(new GetLength(list))]);
+        CpsFragment exitBranch = cps.ifFalse(loopCondition);
+        exitBranch.invokeContinuation(cont, [exitBranch.makeNull()]);
+
+        // Invoke the callback.
+        Primitive arrayItem = cps.letPrim(new GetIndex(list, loopIndex));
+        cps.invokeMethod(callback,
+                         new Selector.callClosure(1),
+                         getValue(callback).type,
+                         [arrayItem]);
+
+        // Check for concurrent modification, unless the list is fixed-length.
+        if (!isFixedLength) {
+          cps.append(
+            makeConcurrentModificationCheck(list, originalLength, sourceInfo));
+        }
+
+        // Increment i and continue the loop.
+        Primitive addOne = cps.applyBuiltin(
+            BuiltinOperator.NumAdd,
+            [loopIndex, cps.makeOne()]);
+        cps.continueLoop(loop, [addOne]);
+
+        replaceSubtree(node, cps.result);
+        visit(cps.result);
+        return true;
+
+      case 'iterator':
+        if (!node.selector.isGetter) return false;
+        Primitive iterator = cont.parameters.single;
+        Continuation iteratorCont = cont;
+
+        // Check that all uses of the iterator are 'moveNext' and 'current'.
+        Selector moveNextSelector = new Selector.call('moveNext', null, 0);
+        Selector currentSelector = new Selector.getter('current', null);
+        assert(!isInterceptedSelector(moveNextSelector));
+        assert(!isInterceptedSelector(currentSelector));
+        for (Reference ref = iterator.firstRef; ref != null; ref = ref.next) {
+          if (ref.parent is! InvokeMethod) return false;
+          InvokeMethod use = ref.parent;
+          if (ref != use.receiver) return false;
+          if (use.selector != moveNextSelector &&
+              use.selector != currentSelector) {
+            return false;
+          }
+        }
+
+        // Rewrite the iterator variable to 'current' and 'index' variables.
+        Primitive originalLength = new GetLength(list);
+        originalLength.hint = new OriginalLengthEntity();
+        MutableVariable index = new MutableVariable(new LoopIndexEntity());
+        MutableVariable current = new MutableVariable(new LoopItemEntity());
+
+        // Rewrite all uses of the iterator.
+        while (iterator.firstRef != null) { 
+          InvokeMethod use = iterator.firstRef.parent;
+          Continuation useCont = use.continuation.definition;
+          if (use.selector == currentSelector) { 
+            // Rewrite iterator.current to a use of the 'current' variable.
+            Parameter result = useCont.parameters.single;
+            if (result.hint != null) {
+              // If 'current' was originally moved into a named variable, use
+              // that variable name for the mutable variable.
+              current.hint = result.hint; 
+            }
+            LetPrim let = 
+                makeLetPrimInvoke(new GetMutableVariable(current), useCont);
+            replaceSubtree(use, let);
+          } else {
+            assert (use.selector == moveNextSelector);
+            // Rewrite iterator.moveNext() to: 
+            //
+            //   if (index < list.length) {
+            //     current = null;
+            //     continuation(false);
+            //   } else {
+            //     current = list[index];
+            //     index = index + 1;
+            //     continuation(true);
+            //   }
+            //
+            // (The above does not show concurrent modification checks)
+
+            // [cps] contains the code we insert instead of moveNext().
+            CpsFragment cps = new CpsFragment(node.sourceInformation);
+
+            // We must check for concurrent modification when calling moveNext.
+            // When moveNext is used as a loop condition, the check prevents
+            // `index < list.length` from becoming the loop condition, and we 
+            // get code like this:
+            //
+            //    while (true) {
+            //      if (originalLength !== list.length) throw;
+            //      if (index < list.length) { 
+            //        ...
+            //      } else { 
+            //        ... 
+            //        break; 
+            //      }
+            //    }
+            //
+            // For loops, we therefore check for concurrent modification before
+            // invoking the recursive continuation, so the loop becomes:
+            //
+            //    if (originalLength !== list.length) throw;
+            //    while (index < list.length) {
+            //      ...
+            //      if (originalLength !== list.length) throw;
+            //    }
+            //
+            // The check before the loop can often be eliminated because it 
+            // follows immediately after the 'iterator' call.
+            InteriorNode parent = getEffectiveParent(use);
+            if (!isFixedLength) {
+              if (parent is Continuation && parent.isRecursive) {
+                // Check for concurrent modification before every invocation
+                // of the continuation.
+                // TODO(asgerf): Do this in a continuation so multiple 
+                //               continues can share the same code.
+                for (Reference ref = parent.firstRef; 
+                     ref != null; 
+                     ref = ref.next) {
+                  Expression invocationCaller = ref.parent;
+                  if (getEffectiveParent(invocationCaller) == iteratorCont) {
+                    // No need to check for concurrent modification immediately
+                    // after the call to 'iterator'.
+                    continue;
+                  }
+                  CpsFragment check = makeConcurrentModificationCheck(
+                      list, originalLength, sourceInfo);
+                  insertBefore(invocationCaller, check);
+                }
+              } else {
+                cps.append(makeConcurrentModificationCheck(
+                    list, originalLength, sourceInfo));
+              }
+            }
+
+            // Check if there are more elements.
+            Primitive hasMore = cps.applyBuiltin(
+                BuiltinOperator.NumLt,
+                [cps.getMutable(index), cps.letPrim(new GetLength(list))]);
+
+            // Return false if there are no more.
+            CpsFragment falseBranch = cps.ifFalse(hasMore);
+            falseBranch
+              ..setMutable(current, falseBranch.makeNull())
+              ..invokeContinuation(useCont, [falseBranch.makeFalse()]);
+
+            // Return true if there are more element.
+            cps.setMutable(current, 
+                cps.letPrim(new GetIndex(list, cps.getMutable(index))));
+            cps.setMutable(index, cps.applyBuiltin(
+                BuiltinOperator.NumAdd,
+                [cps.getMutable(index), cps.makeOne()]));
+            cps.invokeContinuation(useCont, [cps.makeTrue()]);
+
+            // Replace the moveNext() call. It will be visited later.
+            replaceSubtree(use, cps.result);
+          }
+        }
+
+        // Rewrite the iterator call to initializers for 'index' and 'current'.
+        CpsFragment cps = new CpsFragment();
+        cps.letMutable(index, cps.makeZero());
+        cps.letMutable(current, cps.makeNull());
+        cps.letPrim(originalLength);
+
+        // Insert this fragment before the continuation body and replace the
+        // iterator call with a call to the continuation without arguments.
+        // For scoping reasons, the variables must be bound inside the
+        // continuation, not at the invocation-site.
+        iteratorCont.parameters.clear();
+        insertBefore(iteratorCont.body, cps);
+        InvokeContinuation invoke = new InvokeContinuation(iteratorCont, []);
+        replaceSubtree(node, invoke);
+        visit(invoke);
+        // TODO(asgerf): A procedure for rewriting mutables into parameters
+        //               might enable further optimizations after this.
+        return true;
+
+      // TODO(asgerf): Rewrite 'add', 'removeLast', ...
+
+      default:
+        return false;
+    }
+  }
+
+  /// If [prim] is the parameter to a call continuation, returns the
+  /// corresponding call.
+  Invoke getInvocationWithResult(Primitive prim) {
+    if (prim is Parameter && prim.parent is Continuation) {
+      Continuation cont = prim.parent;
+      if (cont.hasExactlyOneUse) {
+        Node use = cont.firstRef.parent;
+        if (use is Invoke) {
+          return use;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Returns the first parent of [node] that is not a pure expression.
+  InteriorNode getEffectiveParent(Expression node) {
+    while (true) {
+      Node parent = node.parent;
+      if (parent is LetCont ||
+          parent is LetPrim && parent.primitive.isSafeForReordering) {
+        node = parent;
+      } else {
+        return parent;
+      }
+    }
+  }
+
+  /// Rewrites an invocation of a torn-off method into a method call directly
+  /// on the receiver. For example:
+  ///
+  ///     obj.get$foo().call$<n>(<args>)
+  ///       =>
+  ///     obj.foo$<n>(<args>)
+  ///
+  bool specializeClosureCall(InvokeMethod node) {
+    Selector call = node.selector;
+    if (!call.isClosureCall) return false;
+
+    assert(!isInterceptedSelector(call));
+    assert(call.argumentCount == node.arguments.length);
+
+    Primitive tearOff = node.receiver.definition;
+    // Note: We don't know if [tearOff] is actually a tear-off.
+    // We name variables based on the pattern we are trying to match.
+
+    if (tearOff is GetStatic && tearOff.element.isFunction) {
+      FunctionElement target = tearOff.element;
+      FunctionSignature signature = target.functionSignature;
+
+      // If the selector does not apply, don't bother (will throw at runtime).
+      if (!call.signatureApplies(target)) return false;
+
+      // If some optional arguments are missing, give up.
+      // TODO(asgerf): Improve optimization by inserting default arguments.
+      if (call.argumentCount != signature.parameterCount) return false;
+
+      InvokeStatic invoke = new InvokeStatic.byReference(
+          target,
+          new Selector.fromElement(target),
+          node.arguments,
+          node.continuation,
+          node.sourceInformation);
+      node.receiver.unlink();
+      replaceSubtree(node, invoke, unlink: false);
+      visitInvokeStatic(invoke);
+      return true;
+    }
+    Invoke tearOffInvoke = getInvocationWithResult(tearOff);
+    if (tearOffInvoke is InvokeMethod && tearOffInvoke.selector.isGetter) {
+      Selector getter = tearOffInvoke.selector;
+
+      // TODO(asgerf): Support torn-off intercepted methods.
+      if (isInterceptedSelector(getter)) return false;
+
+      Continuation getterCont = tearOffInvoke.continuation.definition;
+
+      // TODO(asgerf): Support torn-off intercepted methods.
+      if (isInterceptedSelector(getter)) return false;
+
+      Primitive object = tearOffInvoke.receiver.definition;
+
+      // Ensure that the object actually has a foo member, since we might
+      // otherwise alter a noSuchMethod call.
+      TypeMask type = getValue(object).type;
+      if (typeSystem.needsNoSuchMethodHandling(type, getter)) return false;
+
+      // Determine if the getter invocation can have side-effects.
+      Element element = typeSystem.locateSingleElement(type, getter);
+      bool isPure = element != null && !element.isGetter;
+
+      // If there are multiple uses, we cannot eliminate the getter call and
+      // therefore risk duplicating its side effects.
+      if (!isPure && tearOff.hasMultipleUses) return false;
+
+      // If the getter call is impure, we risk reordering side effects.
+      if (!isPure && getEffectiveParent(node) != getterCont) {
+        return false;
+      }
+
+      InvokeMethod invoke = new InvokeMethod.byReference(
+        new Reference<Primitive>(object),
+        new Selector(SelectorKind.CALL, getter.memberName, call.callStructure),
+        type,
+        node.arguments,
+        node.continuation,
+        node.sourceInformation);
+      node.receiver.unlink();
+      replaceSubtree(node, invoke, unlink: false);
+
+      if (tearOff.hasNoUses) {
+        // Eliminate the getter call if it has no more uses.
+        // This cannot be delegated to other optimizations because we need to
+        // avoid duplication of side effects.
+        getterCont.parameters.clear();
+        replaceSubtree(tearOffInvoke, new InvokeContinuation(getterCont, []));
+      } else {
+        // There are more uses, so we cannot eliminate the getter call. This
+        // means we duplicated the effects of the getter call, but we should
+        // only get here if the getter has no side effects.
+        assert(isPure);
+      }
+
+      visitInvokeMethod(invoke);
+      return true;
+    }
+    return false;
+  }
+
+  void visitInvokeMethod(InvokeMethod node) {
+    if (constifyExpression(node)) return;
+    if (specializeOperatorCall(node)) return;
+    if (specializeFieldAccess(node)) return;
+    if (specializeArrayAccess(node)) return;
+    if (specializeClosureCall(node)) return;
 
     AbstractValue receiver = getValue(node.receiver.definition);
     node.receiverIsNotNull = receiver.isDefinitelyNotNull;
@@ -768,10 +1343,10 @@ class TransformingVisitor extends RecursiveVisitor {
     super.visitTypeCast(node);
   }
 
-  /// Specialize calls to static methods.
+  /// Specialize calls to internal static methods.
   ///
   /// Returns true if the call was replaced.
-  bool specializeInvokeStatic(InvokeStatic node) {
+  bool specializeInternalMethodCall(InvokeStatic node) {
     // TODO(asgerf): This is written to easily scale to more cases,
     //               either add more cases or clean up.
     Continuation cont = node.continuation.definition;
@@ -794,8 +1369,8 @@ class TransformingVisitor extends RecursiveVisitor {
   }
 
   void visitInvokeStatic(InvokeStatic node) {
-    if (constifyExpression(node, node.continuation.definition)) return;
-    if (specializeInvokeStatic(node)) return;
+    if (constifyExpression(node)) return;
+    if (specializeInternalMethodCall(node)) return;
   }
 
   AbstractValue getValue(Primitive primitive) {
@@ -848,6 +1423,7 @@ class TransformingVisitor extends RecursiveVisitor {
             node.arguments[k] = null; // Remove the argument after the loop.
           }
           node.arguments[startOfSequence] = new Reference<Primitive>(prim);
+          node.arguments[startOfSequence].parent = node;
           argumentsWereRemoved = true;
         }
         if (argumentsWereRemoved) {
@@ -903,6 +1479,10 @@ class TransformingVisitor extends RecursiveVisitor {
     node.objectIsNotNull = getValue(node.object.definition).isDefinitelyNotNull;
   }
 
+  void visitGetLength(GetLength node) {
+    node.objectIsNotNull = getValue(node.object.definition).isDefinitelyNotNull;
+  }
+
   void visitLetPrim(LetPrim node) {
     AbstractValue value = getValue(node.primitive);
     if (node.primitive is! Constant && value.isConstant) {
@@ -911,16 +1491,15 @@ class TransformingVisitor extends RecursiveVisitor {
       newPrim.substituteFor(node.primitive);
       RemovalVisitor.remove(node.primitive);
       node.primitive = newPrim;
+      newPrim.parent = node;
     } else {
       Primitive newPrim = visit(node.primitive);
       if (newPrim != null) {
-        if (!values.containsKey(newPrim)) {
-          // If the type was not set, default to the same type as before.
-          values[newPrim] = values[node.primitive];
-        }
         newPrim.substituteFor(node.primitive);
         RemovalVisitor.remove(node.primitive);
         node.primitive = newPrim;
+        newPrim.parent = node;
+        reanalyze(newPrim);
       }
       if (node.primitive.hasNoUses && node.primitive.isSafeForElimination) {
         // Remove unused primitives before entering the body.
@@ -933,6 +1512,42 @@ class TransformingVisitor extends RecursiveVisitor {
       }
     }
     visit(node.body);
+  }
+
+  void visitLetCont(LetCont node) {
+    // Visit body before continuations to ensure more information is available
+    // about the parameters. In particular, if this is a call continuation, its
+    // invocation should be specialized before the body is processed, because
+    // we specialize definitions before their uses.
+    visit(node.body);
+    node.continuations.forEach(visit);
+  }
+
+  void visitInvokeContinuation(InvokeContinuation node) {
+    // Inline the single-use continuations. These are often introduced when
+    // specializing an invocation node. These would also be inlined by a later
+    // pass, but doing it here helps simplify pattern matching code, since the
+    // effective definition of a primitive can then be found without going
+    // through redundant InvokeContinuations.
+    Continuation cont = node.continuation.definition;
+    if (cont.hasExactlyOneUse &&
+        !cont.isReturnContinuation &&
+        !cont.isRecursive &&
+        !node.isEscapingTry) {
+      for (int i = 0; i < node.arguments.length; ++i) {
+        node.arguments[i].definition.useElementAsHint(cont.parameters[i].hint);
+        node.arguments[i].definition.substituteFor(cont.parameters[i]);
+        node.arguments[i].unlink();
+      }
+      node.continuation.unlink();
+      InteriorNode parent = node.parent;
+      Expression body = cont.body;
+      parent.body = body;
+      body.parent = parent;
+      cont.body = new Unreachable();
+      cont.body.parent = cont;
+      visit(body);
+    }
   }
 }
 
@@ -986,12 +1601,20 @@ class TypePropagationVisitor implements Visitor {
 
   void analyze(FunctionDefinition root) {
     reachableNodes.clear();
-    defWorkset.clear();
-    nodeWorklist.clear();
 
     // Initially, only the root node is reachable.
     setReachable(root);
 
+    iterateWorklist();
+  }
+
+  void reanalyzeSubtree(Node node) {
+    new ResetAnalysisInfo(reachableNodes, values).visit(node);
+    setReachable(node);
+    iterateWorklist();
+  }
+
+  void iterateWorklist() {
     while (true) {
       if (nodeWorklist.isNotEmpty) {
         // Process a new reachable expression.
@@ -1195,8 +1818,6 @@ class TypePropagationVisitor implements Visitor {
   }
 
   void visitApplyBuiltinOperator(ApplyBuiltinOperator node) {
-    // Note that most built-in operators do not exist before the transformation
-    // pass after this analysis has finished.
     switch (node.operator) {
       case BuiltinOperator.StringConcatenate:
         DartString stringValue = const LiteralDartString('');
@@ -1252,8 +1873,37 @@ class TypePropagationVisitor implements Visitor {
         }
         break;
 
-      default:
-        setValue(node, nonConstant());
+      // TODO(asgerf): Implement constant propagation for builtins.
+      case BuiltinOperator.NumAdd:
+      case BuiltinOperator.NumSubtract:
+      case BuiltinOperator.NumMultiply:
+      case BuiltinOperator.NumAnd:
+      case BuiltinOperator.NumOr:
+      case BuiltinOperator.NumXor:
+        AbstractValue left = getValue(node.arguments[0].definition);
+        AbstractValue right = getValue(node.arguments[1].definition);
+        if (lattice.isDefinitelyInt(left) && lattice.isDefinitelyInt(right)) {
+          setValue(node, nonConstant(typeSystem.intType));
+        } else {
+          setValue(node, nonConstant(typeSystem.numType));
+        }
+        break;
+
+      case BuiltinOperator.NumLt:
+      case BuiltinOperator.NumLe:
+      case BuiltinOperator.NumGt:
+      case BuiltinOperator.NumGe:
+      case BuiltinOperator.StrictEq:
+      case BuiltinOperator.StrictNeq:
+      case BuiltinOperator.LooseEq:
+      case BuiltinOperator.LooseNeq:
+      case BuiltinOperator.IsFalsy:
+      case BuiltinOperator.IsNumber:
+      case BuiltinOperator.IsNotNumber:
+      case BuiltinOperator.IsFloor:
+      case BuiltinOperator.IsNumberAndFloor:
+        setValue(node, nonConstant(typeSystem.boolType));
+        break;
     }
   }
 
@@ -1364,7 +2014,7 @@ class TypePropagationVisitor implements Visitor {
   void visitLiteralList(LiteralList node) {
     // Constant lists are translated into (Constant ListConstant(...)) IR nodes,
     // and thus LiteralList nodes are NonConst.
-    setValue(node, nonConstant(typeSystem.listType));
+    setValue(node, nonConstant(typeSystem.mutableNativeListType));
   }
 
   void visitLiteralMap(LiteralMap node) {
@@ -1375,7 +2025,12 @@ class TypePropagationVisitor implements Visitor {
 
   void visitConstant(Constant node) {
     ConstantValue value = node.value;
-    setValue(node, constantValue(value, typeSystem.getTypeOf(value)));
+    if (value.isDummy || !value.isConstant) {
+      // TODO(asgerf): Explain how this happens and why we don't want them.
+      setValue(node, nonConstant(typeSystem.getTypeOf(value)));
+    } else {
+      setValue(node, constantValue(value, typeSystem.getTypeOf(value)));
+    }
   }
 
   void visitCreateFunction(CreateFunction node) {
@@ -1516,6 +2171,21 @@ class TypePropagationVisitor implements Visitor {
       setValue(returnValue, nonConstant(node.type));
     }
   }
+
+  @override
+  void visitGetLength(GetLength node) {
+    setValue(node, nonConstant(typeSystem.intType));
+  }
+
+  @override
+  void visitGetIndex(GetIndex node) {
+    setValue(node, nonConstant());
+  }
+
+  @override
+  void visitSetIndex(SetIndex node) {
+    setValue(node, nonConstant());
+  }
 }
 
 /// Represents the abstract value of a primitive value at some point in the
@@ -1538,16 +2208,25 @@ class AbstractValue {
 
   AbstractValue._internal(this.kind, this.constant, this.type) {
     assert(kind != CONSTANT || constant != null);
+    assert(constant is! SyntheticConstantValue);
   }
 
   AbstractValue.nothing()
-      : this._internal(NOTHING, null, null);
+      : this._internal(NOTHING, null, new TypeMask.nonNullEmpty());
 
   AbstractValue.constantValue(ConstantValue constant, TypeMask type)
       : this._internal(CONSTANT, constant, type);
 
-  AbstractValue.nonConstant(TypeMask type)
-      : this._internal(NONCONST, null, type);
+  factory AbstractValue.nonConstant(TypeMask type) {
+    if (type.isEmpty) {
+      if (type.isNullable)
+        return new AbstractValue.constantValue(new NullConstantValue(), type);
+      else
+        return new AbstractValue.nothing();
+    } else {
+      return new AbstractValue._internal(NONCONST, null, type);
+    }
+  }
 
   bool get isNothing  => (kind == NOTHING);
   bool get isConstant => (kind == CONSTANT);
@@ -1582,4 +2261,33 @@ class AbstractValue {
 /// Enum-like class with the names of internal methods we care about.
 abstract class InternalMethod {
   static const String Stringify = 'S';
+}
+
+/// Suggested name for a synthesized loop index.
+class LoopIndexEntity extends Entity {
+  String get name => 'i';
+}
+
+/// Suggested name for the current element of a list being iterated.
+class LoopItemEntity extends Entity {
+  String get name => 'current';
+}
+
+/// Suggested name for the original length of a list, for use in checks
+/// for concurrent modification.
+class OriginalLengthEntity extends Entity {
+  String get name => 'length';
+}
+
+class ResetAnalysisInfo extends RecursiveVisitor {
+  Set<Node> reachableNodes;
+  Map<Definition, AbstractValue> values;
+
+  ResetAnalysisInfo(this.reachableNodes, this.values);
+
+  visit(Node node) {
+    reachableNodes.remove(node);
+    if (node is Definition) values.remove(node);
+    node.accept(this);
+  }
 }

@@ -8,6 +8,45 @@
     `setInnerHtml` or other methods that create DOM from text. It is
     also more efficient, skipping the creation of a `DocumentFragment`.
 
+* `dart:io`
+  * Added two new file modes, `WRITE_ONLY` and `WRITE_ONLY_APPEND` for
+    opening a file write only.
+    [eaeecf2](https://github.com/dart-lang/sdk/commit/eaeecf2ed13ba6c7fbfd653c3c592974a7120960)
+  * Change stdout/stderr to binary mode on Windows.
+    [4205b29](https://github.com/dart-lang/sdk/commit/4205b2997e01f2cea8e2f44c6f46ed6259ab7277)
+
+### Tool changes
+
+* Pub
+
+  * Pub will now generate a ".packages" file in addition to the "packages"
+    directory when running `pub get` or similar operations, per the
+    [package spec proposal][]. Pub now has a `--no-package-symlinks` flag that
+    will stop "packages" directories from being generated at all.
+
+  * When `pub publish` finds a violation, it will emit a non-zero exit code.
+
+  * `pub run` starts up faster for executables that don't import transformed
+    code.
+
+  * An issue where HTTP requests were sometimes made even though `--offline` was
+    passed to `pub get` or `pub upgrade` has been fixed.
+
+  * A bug with `--offline` that caused an unhelpful error message has been
+    fixed.
+
+  * A crashing bug involving transformers that only apply to non-public code has
+    been fixed.
+
+[package spec proposal]: https://github.com/lrhn/dep-pkgspec
+
+## 1.11.1
+
+### Tool changes
+
+* Pub will always load Dart SDK assets from the SDK whose `pub` executable was
+  run, even if a `DART_SDK` environment variable is set.
+
 ## 1.11.0 - 2015-06-25
 
 ### Core library changes
@@ -30,7 +69,7 @@
   * List iterators may not throw `ConcurrentModificationError` as eagerly in
     release mode. In checked mode, the modification check is still as eager
     as possible.
-    [r45198](https://code.google.com/p/dart/source/detail?r=45198)
+    [r45198](https://github.com/dart-lang/sdk/commit/5a79c03)
 
 * `dart:developer` - **NEW**
   * Replaces the deprecated `dart:profiler` library.
@@ -79,9 +118,9 @@
   * **POTENTIALLY BREAKING** Fix behavior of `HtmlEscape`. It no longer escapes
   no-break space (U+00A0) anywhere or forward slash (`/`, `U+002F`) in element
   context. Slash is still escaped using `HtmlEscapeMode.UNKNOWN`.
-  [r45003](https://code.google.com/p/dart/source/detail?r=45003),
-  [r45153](https://code.google.com/p/dart/source/detail?r=45153),
-  [r45189](https://code.google.com/p/dart/source/detail?r=45189)
+  [r45003](https://github.com/dart-lang/sdk/commit/8b8223d),
+  [r45153](https://github.com/dart-lang/sdk/commit/8a5d049),
+  [r45189](https://github.com/dart-lang/sdk/commit/3c39ad2)
 
 * `dart:core`
   * `Uri.parse` added `start` and `end` positional arguments.

@@ -10,7 +10,6 @@ import 'dart:math' as math;
 import 'package:analyzer/src/context/cache.dart'
     show CacheEntry, TargetedResult;
 import 'package:analyzer/src/generated/constant.dart';
-import 'package:analyzer/src/services/lint.dart';
 import 'package:analyzer/src/task/dart.dart'
     show
         HINTS,
@@ -184,7 +183,6 @@ class DeclarationMatcher extends RecursiveAstVisitor {
     _enclosingClass = element;
     _processElement(element);
     _assertSameTypeParameters(node.typeParameters, element.typeParameters);
-    _processElement(element.unnamedConstructor);
     super.visitClassTypeAlias(node);
   }
 
@@ -361,17 +359,19 @@ class DeclarationMatcher extends RecursiveAstVisitor {
       node.name.staticElement = element;
       _setLocalElements(element, newElement);
     } on _DeclarationMismatchException {
-      _addedElements.add(newElement);
       _removeElement(element);
       // add new element
-      if (newElement is MethodElement) {
-        List<MethodElement> methods = _enclosingClass.methods;
-        methods.add(newElement);
-        _enclosingClass.methods = methods;
-      } else {
-        List<PropertyAccessorElement> accessors = _enclosingClass.accessors;
-        accessors.add(newElement);
-        _enclosingClass.accessors = accessors;
+      if (newElement != null) {
+        _addedElements.add(newElement);
+        if (newElement is MethodElement) {
+          List<MethodElement> methods = _enclosingClass.methods;
+          methods.add(newElement);
+          _enclosingClass.methods = methods;
+        } else {
+          List<PropertyAccessorElement> accessors = _enclosingClass.accessors;
+          accessors.add(newElement);
+          _enclosingClass.accessors = accessors;
+        }
       }
     }
   }
@@ -790,10 +790,12 @@ class DeclarationMatcher extends RecursiveAstVisitor {
 
   static void _setLocalElements(
       ExecutableElementImpl to, ExecutableElement from) {
-    to.functions = from.functions;
-    to.labels = from.labels;
-    to.localVariables = from.localVariables;
-    to.parameters = from.parameters;
+    if (from != null) {
+      to.functions = from.functions;
+      to.labels = from.labels;
+      to.localVariables = from.localVariables;
+      to.parameters = from.parameters;
+    }
   }
 }
 
@@ -896,7 +898,6 @@ class IncrementalResolver {
 
   List<AnalysisError> _resolveErrors = AnalysisError.NO_ERRORS;
   List<AnalysisError> _verifyErrors = AnalysisError.NO_ERRORS;
-  List<AnalysisError> _lints = AnalysisError.NO_ERRORS;
 
   /**
    * Initialize a newly created incremental resolver to resolve a node in the
@@ -938,7 +939,6 @@ class IncrementalResolver {
       // verify
       _verify(rootNode);
       _context.invalidateLibraryHints(_librarySource);
-      _generateLints(rootNode);
       // update entry errors
       _updateEntry();
       // notify unit
@@ -1050,24 +1050,6 @@ class IncrementalResolver {
     throw new AnalysisException("Cannot resolve node: no resolvable node");
   }
 
-  void _generateLints(AstNode node) {
-    LoggingTimer timer = logger.startTimer();
-    try {
-      if (_context.analysisOptions.lint) {
-        RecordingErrorListener errorListener = new RecordingErrorListener();
-        CompilationUnit unit = node.getAncestor((n) => n is CompilationUnit);
-        LintGenerator lintGenerator =
-            new LintGenerator(<CompilationUnit>[unit], errorListener);
-        lintGenerator.generate();
-        _lints = errorListener.getErrorsForSource(_source);
-      } else {
-        _lints = AnalysisError.NO_ERRORS;
-      }
-    } finally {
-      timer.stop('generate lints');
-    }
-  }
-
   /**
    * Return the element defined by [node], or `null` if the node does not
    * define an element.
@@ -1095,20 +1077,23 @@ class IncrementalResolver {
       Scope scope = _resolutionContext.scope;
       // resolve types
       {
-        TypeResolverVisitor visitor = new TypeResolverVisitor.con3(
-            _definingLibrary, _source, _typeProvider, scope, errorListener);
+        TypeResolverVisitor visitor = new TypeResolverVisitor(
+            _definingLibrary, _source, _typeProvider, errorListener,
+            nameScope: scope);
         node.accept(visitor);
       }
       // resolve variables
       {
-        VariableResolverVisitor visitor = new VariableResolverVisitor.con2(
-            _definingLibrary, _source, _typeProvider, scope, errorListener);
+        VariableResolverVisitor visitor = new VariableResolverVisitor(
+            _definingLibrary, _source, _typeProvider, errorListener,
+            nameScope: scope);
         node.accept(visitor);
       }
       // resolve references
       {
-        ResolverVisitor visitor = new ResolverVisitor.con3(
-            _definingLibrary, _source, _typeProvider, scope, errorListener);
+        ResolverVisitor visitor = new ResolverVisitor(
+            _definingLibrary, _source, _typeProvider, errorListener,
+            nameScope: scope);
         if (_resolutionContext.enclosingClassDeclaration != null) {
           visitor.visitClassDeclarationIncrementally(
               _resolutionContext.enclosingClassDeclaration);
@@ -1198,21 +1183,8 @@ class IncrementalResolver {
   }
 
   void _updateEntry_OLD() {
-    {
-      List<AnalysisError> oldErrors = oldEntry.getValueInLibrary(
-          DartEntry.RESOLUTION_ERRORS, _librarySource);
-      List<AnalysisError> errors = _updateErrors(oldErrors, _resolveErrors);
-      oldEntry.setValueInLibrary(
-          DartEntry.RESOLUTION_ERRORS, _librarySource, errors);
-    }
-    {
-      List<AnalysisError> oldErrors = oldEntry.getValueInLibrary(
-          DartEntry.VERIFICATION_ERRORS, _librarySource);
-      List<AnalysisError> errors = _updateErrors(oldErrors, _verifyErrors);
-      oldEntry.setValueInLibrary(
-          DartEntry.VERIFICATION_ERRORS, _librarySource, errors);
-    }
-    oldEntry.setValueInLibrary(DartEntry.LINTS, _librarySource, _lints);
+    _updateErrors_OLD(DartEntry.RESOLUTION_ERRORS, _resolveErrors);
+    _updateErrors_OLD(DartEntry.VERIFICATION_ERRORS, _verifyErrors);
   }
 
   List<AnalysisError> _updateErrors(
@@ -1244,6 +1216,14 @@ class IncrementalResolver {
     List<AnalysisError> oldErrors = newUnitEntry.getValue(descriptor);
     List<AnalysisError> errors = _updateErrors(oldErrors, newErrors);
     newUnitEntry.setValueIncremental(descriptor, errors);
+  }
+
+  void _updateErrors_OLD(DataDescriptor<List<AnalysisError>> descriptor,
+      List<AnalysisError> newErrors) {
+    List<AnalysisError> oldErrors =
+        oldEntry.getValueInLibrary(descriptor, _librarySource);
+    List<AnalysisError> errors = _updateErrors(oldErrors, newErrors);
+    oldEntry.setValueInLibrary(descriptor, _librarySource, errors);
   }
 
   void _verify(AstNode node) {
@@ -1395,9 +1375,13 @@ class PoorMansIncrementalResolver {
                     newParent is MethodDeclaration ||
                 oldParent is ConstructorDeclaration &&
                     newParent is ConstructorDeclaration) {
-              oldNode = oldParent;
-              newNode = newParent;
-              found = true;
+              Element oldElement = (oldParent as Declaration).element;
+              if (new DeclarationMatcher().matches(newParent, oldElement) ==
+                  DeclarationMatchKind.MATCH) {
+                oldNode = oldParent;
+                newNode = newParent;
+                found = true;
+              }
             }
             if (oldParent is FunctionBody && newParent is FunctionBody) {
               oldNode = oldParent;

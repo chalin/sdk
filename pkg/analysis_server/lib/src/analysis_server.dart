@@ -22,8 +22,11 @@ import 'package:analysis_server/src/services/correction/namespace.dart';
 import 'package:analysis_server/src/services/index/index.dart';
 import 'package:analysis_server/src/services/search/search_engine.dart';
 import 'package:analysis_server/src/source/optimizing_pub_package_map_provider.dart';
+import 'package:analysis_server/uri/resolver_provider.dart';
 import 'package:analyzer/file_system/file_system.dart';
 import 'package:analyzer/instrumentation/instrumentation.dart';
+import 'package:analyzer/source/package_map_resolver.dart';
+import 'package:analyzer/source/sdk_ext.dart';
 import 'package:analyzer/src/generated/ast.dart';
 import 'package:analyzer/src/generated/element.dart';
 import 'package:analyzer/src/generated/engine.dart';
@@ -69,7 +72,7 @@ class AnalysisServer {
    * The version of the analysis server. The value should be replaced
    * automatically during the build.
    */
-  static final String VERSION = '1.7.0';
+  static final String VERSION = '2.0.0';
 
   /**
    * The number of milliseconds to perform operations before inserting
@@ -260,13 +263,14 @@ class AnalysisServer {
       OptimizingPubPackageMapProvider packageMapProvider, Index _index,
       this.serverPlugin, AnalysisServerOptions analysisServerOptions,
       this.defaultSdk, this.instrumentationService,
-      {this.rethrowExceptions: true})
+      {ResolverProvider packageResolverProvider: null,
+      this.rethrowExceptions: true})
       : index = _index,
         searchEngine = _index != null ? createSearchEngine(_index) : null {
     _performance = performanceDuringStartup;
     operationQueue = new ServerOperationQueue();
-    contextDirectoryManager = new ServerContextManager(
-        this, resourceProvider, packageMapProvider, instrumentationService);
+    contextDirectoryManager = new ServerContextManager(this, resourceProvider,
+        packageResolverProvider, packageMapProvider, instrumentationService);
     contextDirectoryManager.defaultOptions.incremental = true;
     contextDirectoryManager.defaultOptions.incrementalApi =
         analysisServerOptions.enableIncrementalResolutionApi;
@@ -1310,9 +1314,11 @@ class ServerContextManager extends ContextManager {
   StreamController<ContextsChangedEvent> _onContextsChangedController;
 
   ServerContextManager(this.analysisServer, ResourceProvider resourceProvider,
+      ResolverProvider packageResolverProvider,
       OptimizingPubPackageMapProvider packageMapProvider,
       InstrumentationService service)
-      : super(resourceProvider, packageMapProvider, service) {
+      : super(resourceProvider, packageResolverProvider, packageMapProvider,
+          service) {
     _onContextsChangedController =
         new StreamController<ContextsChangedEvent>.broadcast();
   }
@@ -1425,9 +1431,17 @@ class ServerContextManager extends ContextManager {
   SourceFactory _createSourceFactory(UriResolver packageUriResolver) {
     UriResolver dartResolver = new DartUriResolver(analysisServer.defaultSdk);
     UriResolver resourceResolver = new ResourceUriResolver(resourceProvider);
-    List<UriResolver> resolvers = packageUriResolver != null
-        ? <UriResolver>[dartResolver, packageUriResolver, resourceResolver]
-        : <UriResolver>[dartResolver, resourceResolver];
+    List<UriResolver> resolvers = [];
+    resolvers.add(dartResolver);
+    if (packageUriResolver is PackageMapUriResolver) {
+      UriResolver sdkExtResolver =
+          new SdkExtUriResolver(packageUriResolver.packageMap);
+      resolvers.add(sdkExtResolver);
+    }
+    if (packageUriResolver != null) {
+      resolvers.add(packageUriResolver);
+    }
+    resolvers.add(resourceResolver);
     return new SourceFactory(resolvers);
   }
 }

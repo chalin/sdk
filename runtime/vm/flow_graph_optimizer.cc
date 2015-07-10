@@ -4109,12 +4109,40 @@ static bool TryExpandTestCidsResult(ZoneGrowableArray<intptr_t>* results,
 void FlowGraphOptimizer::ReplaceWithInstanceOf(InstanceCallInstr* call) {
   ASSERT(Token::IsTypeTestOperator(call->token_kind()));
   Definition* left = call->ArgumentAt(0);
-  Definition* instantiator = call->ArgumentAt(1);
-  Definition* type_args = call->ArgumentAt(2);
-  const AbstractType& type =
-      AbstractType::Cast(call->ArgumentAt(3)->AsConstant()->value());
-  const bool negate = Bool::Cast(
-      call->ArgumentAt(4)->OriginalDefinition()->AsConstant()->value()).value();
+  Definition* instantiator = NULL;
+  Definition* type_args = NULL;
+  AbstractType& type = AbstractType::ZoneHandle(Z);
+  bool negate = false;
+  if (call->ArgumentCount() == 2) {
+    instantiator = flow_graph()->constant_null();
+    type_args = flow_graph()->constant_null();
+    if (call->function_name().raw() ==
+        Library::PrivateCoreLibName(Symbols::_instanceOfNum()).raw()) {
+      type = Type::Number();
+    } else if (call->function_name().raw() ==
+        Library::PrivateCoreLibName(Symbols::_instanceOfInt()).raw()) {
+      type = Type::IntType();
+    } else if (call->function_name().raw() ==
+        Library::PrivateCoreLibName(Symbols::_instanceOfSmi()).raw()) {
+      type = Type::SmiType();
+    } else if (call->function_name().raw() ==
+        Library::PrivateCoreLibName(Symbols::_instanceOfDouble()).raw()) {
+      type = Type::Double();
+    } else if (call->function_name().raw() ==
+        Library::PrivateCoreLibName(Symbols::_instanceOfString()).raw()) {
+      type = Type::StringType();
+    } else {
+      UNIMPLEMENTED();
+    }
+    negate = Bool::Cast(call->ArgumentAt(1)->OriginalDefinition()
+        ->AsConstant()->value()).value();
+  } else {
+    instantiator = call->ArgumentAt(1);
+    type_args = call->ArgumentAt(2);
+    type = AbstractType::Cast(call->ArgumentAt(3)->AsConstant()->value()).raw();
+    negate = Bool::Cast(call->ArgumentAt(4)->OriginalDefinition()
+        ->AsConstant()->value()).value();
+  }
   const ICData& unary_checks =
       ICData::ZoneHandle(Z, call->ic_data()->AsUnaryClassChecks());
   if (FLAG_warn_on_javascript_compatibility &&
@@ -5508,7 +5536,7 @@ class Place : public ValueObject {
     if (def == NULL) {
       return "*";
     } else {
-      return Isolate::Current()->current_zone()->PrintToString(
+      return Thread::Current()->zone()->PrintToString(
             "v%" Pd, def->ssa_temp_index());
     }
   }
@@ -5521,34 +5549,34 @@ class Place : public ValueObject {
       case kField: {
         const char* field_name = String::Handle(field().name()).ToCString();
         if (field().is_static()) {
-          return Isolate::Current()->current_zone()->PrintToString(
+          return Thread::Current()->zone()->PrintToString(
               "<%s>", field_name);
         } else {
-          return Isolate::Current()->current_zone()->PrintToString(
+          return Thread::Current()->zone()->PrintToString(
               "<%s.%s>", DefinitionName(instance()), field_name);
         }
       }
 
       case kVMField:
-        return Isolate::Current()->current_zone()->PrintToString(
+        return Thread::Current()->zone()->PrintToString(
             "<%s.@%" Pd ">",
             DefinitionName(instance()),
             offset_in_bytes());
 
       case kIndexed:
-        return Isolate::Current()->current_zone()->PrintToString(
+        return Thread::Current()->zone()->PrintToString(
             "<%s[%s]>",
             DefinitionName(instance()),
             DefinitionName(index()));
 
       case kConstantIndexed:
         if (element_size() == kNoSize) {
-          return Isolate::Current()->current_zone()->PrintToString(
+          return Thread::Current()->zone()->PrintToString(
               "<%s[%" Pd "]>",
               DefinitionName(instance()),
               index_constant());
         } else {
-          return Isolate::Current()->current_zone()->PrintToString(
+          return Thread::Current()->zone()->PrintToString(
               "<%s[%" Pd "|%" Pd "]>",
               DefinitionName(instance()),
               index_constant(),

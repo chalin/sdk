@@ -10,6 +10,7 @@ library engine.engine_test;
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:analyzer/file_system/memory_file_system.dart';
 import 'package:analyzer/src/cancelable_future.dart';
 import 'package:analyzer/src/context/cache.dart' show CacheEntry;
 import 'package:analyzer/src/generated/ast.dart';
@@ -33,7 +34,6 @@ import 'package:analyzer/src/generated/testing/element_factory.dart';
 import 'package:analyzer/src/generated/utilities_collection.dart';
 import 'package:analyzer/src/services/lint.dart';
 import 'package:analyzer/src/string_source.dart';
-import 'package:analyzer/src/task/task_dart.dart';
 import 'package:analyzer/task/model.dart' hide AnalysisTask;
 import 'package:html/dom.dart' show Document;
 import 'package:path/path.dart' as pathos;
@@ -446,6 +446,42 @@ import 'libB.dart';''';
       listener.assertEvent(wereSourcesRemovedOrDeleted: true);
       listener.assertNoMoreEvents();
     });
+  }
+
+  /**
+   * IDEA uses the following scenario:
+   * 1. Add overlay.
+   * 2. Change overlay.
+   * 3. If the contents of the document buffer is the same as the contents
+   *    of the file, remove overlay.
+   * So, we need to try to use incremental resolution for removing overlays too.
+   */
+  void test_applyChanges_remove_incremental() {
+    MemoryResourceProvider resourceProvider = new MemoryResourceProvider();
+    Source source = resourceProvider.newFile('/test.dart', r'''
+main() {
+  print(1);
+}
+''').createSource();
+    _context = AnalysisContextFactory.oldContextWithCore();
+    _context.analysisOptions = new AnalysisOptionsImpl()..incremental = true;
+    _context.applyChanges(new ChangeSet()..addedSource(source));
+    // remember compilation unit
+    _analyzeAll_assertFinished();
+    CompilationUnit unit = _context.getResolvedCompilationUnit2(source, source);
+    // add overlay
+    _context.setContents(source, r'''
+main() {
+  print(12);
+}
+''');
+    _analyzeAll_assertFinished();
+    expect(_context.getResolvedCompilationUnit2(source, source), unit);
+    // remove overlay
+    _context.setContents(source, null);
+    _context.validateCacheConsistency();
+    _analyzeAll_assertFinished();
+    expect(_context.getResolvedCompilationUnit2(source, source), unit);
   }
 
   Future test_applyChanges_removeContainer() {
@@ -5820,10 +5856,16 @@ class TestAnalysisContext implements InternalAnalysisContext {
     return false;
   }
 
+  @deprecated
   @override
   void visitCacheItems(void callback(Source source, SourceEntry dartEntry,
       DataDescriptor rowDesc, CacheState state)) {
     fail("Unexpected invocation of visitCacheItems");
+  }
+
+  @override
+  void visitContentCache(ContentCacheVisitor visitor) {
+    fail("Unexpected invocation of visitContentCache");
   }
 }
 
@@ -6375,12 +6417,6 @@ class TestAnalysisContext_test_setSourceFactory extends TestAnalysisContext {
  * failure.
  */
 class TestTaskVisitor<E> implements AnalysisTaskVisitor<E> {
-  @override
-  E visitBuildUnitElementTask(BuildUnitElementTask task) {
-    fail("Unexpectedly invoked visitGenerateDartErrorsTask");
-    return null;
-  }
-
   @override
   E visitGenerateDartErrorsTask(GenerateDartErrorsTask task) {
     fail("Unexpectedly invoked visitGenerateDartErrorsTask");

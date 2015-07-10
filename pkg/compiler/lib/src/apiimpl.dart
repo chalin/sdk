@@ -11,8 +11,8 @@ import '../compiler.dart' as api;
 import 'dart2jslib.dart' as leg;
 import 'tree/tree.dart' as tree;
 import 'elements/elements.dart' as elements;
-import 'package:_internal/libraries.dart' hide LIBRARIES;
-import 'package:_internal/libraries.dart' as library_info show LIBRARIES;
+import 'package:sdk_library_metadata/libraries.dart' hide LIBRARIES;
+import 'package:sdk_library_metadata/libraries.dart' as library_info show LIBRARIES;
 import 'io/source_file.dart';
 import 'package:package_config/packages.dart';
 import 'package:package_config/packages_file.dart' as pkgs;
@@ -60,6 +60,8 @@ class Compiler extends leg.Compiler {
             trustPrimitives:
                 hasOption(options, '--trust-primitives'),
             enableMinification: hasOption(options, '--minify'),
+            useFrequencyNamer:
+                !hasOption(options, "--no-frequency-based-minification"),
             preserveUris: hasOption(options, '--preserve-uris'),
             enableNativeLiveTypeAnalysis:
                 !hasOption(options, '--disable-native-live-type-analysis'),
@@ -102,9 +104,7 @@ class Compiler extends leg.Compiler {
                 hasOption(options, '--generate-code-with-compile-time-errors'),
             testMode: hasOption(options, '--test-mode'),
             allowNativeExtensions:
-                hasOption(options, '--allow-native-extensions'),
-            enableNullAwareOperators:
-                hasOption(options, '--enable-null-aware-operators')) {
+                hasOption(options, '--allow-native-extensions')) {
     tasks.addAll([
         userHandlerTask = new leg.GenericTask('Diagnostic handler', this),
         userProviderTask = new leg.GenericTask('Input provider', this),
@@ -367,46 +367,52 @@ class Compiler extends leg.Compiler {
         });
   }
 
-  Future setupPackages(Uri uri) async {
+  Future setupPackages(Uri uri) {
     if (packageRoot != null) {
       // Use "non-file" packages because the file version requires a [Directory]
       // and we can't depend on 'dart:io' classes.
       packages = new NonFilePackagesDirectoryPackages(packageRoot);
     } else if (packageConfig != null) {
-      var packageConfigContents = await provider(packageConfig);
-      if (packageConfigContents is String) {
-        packageConfigContents = UTF8.encode(packageConfigContents);
-      }
-      packages =
-          new MapPackages(pkgs.parse(packageConfigContents, packageConfig));
+      return provider(packageConfig).then((packageConfigContents) {
+        if (packageConfigContents is String) {
+          packageConfigContents = UTF8.encode(packageConfigContents);
+        }
+        packages =
+            new MapPackages(pkgs.parse(packageConfigContents, packageConfig));
+      });
     } else {
       if (packagesDiscoveryProvider == null) {
         packages = Packages.noPackages;
       } else {
-        packages = await callUserPackagesDiscovery(uri);
+        return callUserPackagesDiscovery(uri).then((p) {
+          packages = p;
+        });
       }
     }
+    return new Future.value();
   }
 
-  Future<bool> run(Uri uri) async {
+  Future<bool> run(Uri uri) {
     log('Allowed library categories: $allowedLibraryCategories');
 
-    await setupPackages(uri);
-    assert(packages != null);
+    return setupPackages(uri).then((_) {
+      assert(packages != null);
 
-    bool success = await super.run(uri);
-    int cumulated = 0;
-    for (final task in tasks) {
-      int elapsed = task.timing;
-      if (elapsed != 0) {
-        cumulated += elapsed;
-        log('${task.name} took ${elapsed}msec');
-      }
-    }
-    int total = totalCompileTime.elapsedMilliseconds;
-    log('Total compile-time ${total}msec;'
-        ' unaccounted ${total - cumulated}msec');
-    return success;
+      return super.run(uri).then((bool success) {
+        int cumulated = 0;
+        for (final task in tasks) {
+          int elapsed = task.timing;
+          if (elapsed != 0) {
+            cumulated += elapsed;
+            log('${task.name} took ${elapsed}msec');
+          }
+        }
+        int total = totalCompileTime.elapsedMilliseconds;
+        log('Total compile-time ${total}msec;'
+            ' unaccounted ${total - cumulated}msec');
+        return success;
+      });
+    });
   }
 
   void reportDiagnostic(leg.Spannable node,

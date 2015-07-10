@@ -279,41 +279,27 @@ class UnionWithNullTypeImpl extends /*Interface*/ TypeImpl implements UnionWithN
   @override
   int get hashCode => typeArgument.hashCode;
 
-  @override
-  bool isAssignableTo(DartType type) {
-    return super.isAssignableTo(type);
-  }
-
-  @override
-  bool isSubtypeOf(DartType type) {
-    return super.isSubtypeOf(type);
-  }
-
-  /// Returns ?[typeArgument] << [s].
+  /// Return ?[typeArgument] << [s].
   @override
   bool isMoreSpecificThan(DartType s,
       [bool withDynamic = false, Set<Element> visitedElements]) {
-    // Let this be ?T. ?T << S iff T << S && Null << S.
+    // Let [this] be ?V. ?V << S iff Null << S &&  V << S (B.3.1.b.5)
 
     // Optimizations:
-    if (this == s) return true;
-    if (s.isDynamic) return true;
+    if (this == s || s.isDynamic) return true;
 
-    // We don't optimize out the Null << S so that it will work if ever
-    // we adopt _Anything as a root.
+    // We don't optimize the Null << S expression in case (B.2.1) is adopted
+    // including with _Anything as a root and void as an interface of Null.
     return nullType.isMoreSpecificThan(s) &&
         typeArgument.isMoreSpecificThan(s, withDynamic, visitedElements);
-
-    // return s.isDynamic || // or U << type
-    //   typeArgument.isMoreSpecificThan(s, withDynamic, visitedElements);
   }
 
-  /// Returns: [s] << ?[typeArgument]; i.e.,
-  /// iff [s] is [Null] || [s] << [typeArgument].
+  /// Return [s] << ?[typeArgument], which holds if [s] << [Null] || [s] << [typeArgument].
   @override
   bool invIsMoreSpecificThan(DartType s,
           [bool withDynamic = false, Set<Element> visitedElements]) =>
-      s == nullType || s.isMoreSpecificThan(typeArgument);
+      // In theory the bottom type isn't used in DartNNBD, but we test for it just in case.
+      s.isNull || s.isBottom || s.isMoreSpecificThan(typeArgument);
 
   @override
   PropertyAccessorElement lookUpGetter(

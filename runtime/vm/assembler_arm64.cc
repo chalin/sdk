@@ -31,35 +31,6 @@ Assembler::Assembler(bool use_far_branches)
       use_far_branches_(use_far_branches),
       comments_(),
       allow_constant_pool_(true) {
-  if (Isolate::Current() != Dart::vm_isolate()) {
-    // These objects and labels need to be accessible through every pool-pointer
-    // at the same index.
-    intptr_t index =
-        object_pool_wrapper_.AddObject(Object::null_object());
-    ASSERT(index == 0);
-
-    index = object_pool_wrapper_.AddObject(Bool::True());
-    ASSERT(index == 1);
-
-    index = object_pool_wrapper_.AddObject(Bool::False());
-    ASSERT(index == 2);
-
-    const Smi& vacant = Smi::Handle(Smi::New(0xfa >> kSmiTagShift));
-    StubCode* stub_code = Isolate::Current()->stub_code();
-    if (stub_code->UpdateStoreBuffer_entry() != NULL) {
-      object_pool_wrapper_.AddExternalLabel(
-          &stub_code->UpdateStoreBufferLabel(), kNotPatchable);
-    } else {
-      object_pool_wrapper_.AddObject(vacant);
-    }
-
-    if (stub_code->CallToRuntime_entry() != NULL) {
-      object_pool_wrapper_.AddExternalLabel(
-          &stub_code->CallToRuntimeLabel(), kNotPatchable);
-    } else {
-      object_pool_wrapper_.AddObject(vacant);
-    }
-  }
 }
 
 
@@ -394,18 +365,10 @@ intptr_t Assembler::FindImmediate(int64_t imm) {
 }
 
 
-// A set of VM objects that are present in every constant pool.
-static bool IsAlwaysInConstantPool(const Object& object) {
-  // TODO(zra): Evaluate putting all VM heap objects into the pool.
-  return (object.raw() == Object::null())
-      || (object.raw() == Bool::True().raw())
-      || (object.raw() == Bool::False().raw());
-}
-
-
-bool Assembler::CanLoadObjectFromPool(const Object& object) {
+bool Assembler::CanLoadFromObjectPool(const Object& object) const {
+  ASSERT(!Thread::CanLoadFromThread(object));
   if (!allow_constant_pool()) {
-    return IsAlwaysInConstantPool(object);
+    return false;
   }
 
   // TODO(zra, kmillikin): Also load other large immediates from the object
@@ -464,10 +427,16 @@ void Assembler::LoadIsolate(Register dst, Register pp) {
 }
 
 
-void Assembler::LoadObject(Register dst, const Object& object, Register pp) {
-  if (CanLoadObjectFromPool(object)) {
-    const int32_t offset =
-        ObjectPool::element_offset(object_pool_wrapper_.FindObject(object));
+void Assembler::LoadObjectHelper(Register dst,
+                                 const Object& object,
+                                 Register pp,
+                                 bool is_unique) {
+  if (Thread::CanLoadFromThread(object)) {
+    ldr(dst, Address(THR, Thread::OffsetFromThread(object)));
+  } else if (CanLoadFromObjectPool(object)) {
+    const int32_t offset = ObjectPool::element_offset(
+        is_unique ? object_pool_wrapper_.AddObject(object)
+                  : object_pool_wrapper_.FindObject(object));
     LoadWordFromPoolOffset(dst, pp, offset);
   } else {
     ASSERT((Isolate::Current() == Dart::vm_isolate()) ||
@@ -478,8 +447,23 @@ void Assembler::LoadObject(Register dst, const Object& object, Register pp) {
 }
 
 
+void Assembler::LoadObject(Register dst, const Object& object, Register pp) {
+  LoadObjectHelper(dst, object, pp, false);
+}
+
+
+void Assembler::LoadUniqueObject(Register dst,
+                                 const Object& object,
+                                 Register pp) {
+  LoadObjectHelper(dst, object, pp, true);
+}
+
+
 void Assembler::CompareObject(Register reg, const Object& object, Register pp) {
-  if (CanLoadObjectFromPool(object)) {
+  if (Thread::CanLoadFromThread(object)) {
+    ldr(TMP, Address(THR, Thread::OffsetFromThread(object)));
+    CompareRegisters(reg, TMP);
+  } else if (CanLoadFromObjectPool(object)) {
     LoadObject(TMP, object, pp);
     CompareRegisters(reg, TMP);
   } else {
@@ -922,8 +906,8 @@ void Assembler::StoreIntoObject(Register object,
   if (object != R0) {
     mov(R0, object);
   }
-  StubCode* stub_code = Isolate::Current()->stub_code();
-  BranchLink(&stub_code->UpdateStoreBufferLabel(), PP);
+  ldr(TMP, Address(THR, Thread::update_store_buffer_entry_point_offset()));
+  blr(TMP);
   Pop(LR);
   if (value != R0) {
     // Restore R0.
@@ -1016,7 +1000,7 @@ void Assembler::CompareClassId(
 }
 
 
-void Assembler::LoadTaggedClassIdMayBeSmi(Register result, Register object) {
+void Assembler::LoadClassIdMayBeSmi(Register result, Register object) {
   // Load up a null object. We only need it so we can use LoadClassId on it in
   // the case that object is a Smi..
   LoadObject(TMP, Object::null_object(), PP);
@@ -1031,6 +1015,11 @@ void Assembler::LoadTaggedClassIdMayBeSmi(Register result, Register object) {
   LoadImmediate(TMP, kSmiCid, PP);
   // If object is a Smi, move the Smi cid into result. o/w leave alone.
   csel(result, TMP, result, EQ);
+}
+
+
+void Assembler::LoadTaggedClassIdMayBeSmi(Register result, Register object) {
+  LoadClassIdMayBeSmi(result, object);
   // Finally, tag the result.
   SmiTag(result);
 }
@@ -1333,6 +1322,31 @@ void Assembler::UpdateAllocationStatsWithSize(intptr_t cid,
 }
 
 
+void Assembler::MaybeTraceAllocation(intptr_t cid,
+                                     Register temp_reg,
+                                     Register pp,
+                                     Label* trace) {
+  ASSERT(cid > 0);
+  Isolate* isolate = Isolate::Current();
+  ClassTable* class_table = isolate->class_table();
+  const uword class_offset = cid * sizeof(ClassHeapStats);  // NOLINT
+  if (cid < kNumPredefinedCids) {
+    const uword class_heap_stats_table_address =
+        class_table->PredefinedClassHeapStatsTableAddress();
+    LoadImmediate(temp_reg, class_heap_stats_table_address + class_offset, pp);
+  } else {
+    LoadImmediate(temp_reg, class_table->ClassStatsTableAddress(), pp);
+    ldr(temp_reg, Address(temp_reg, 0));
+    AddImmediate(temp_reg, temp_reg, class_offset, pp);
+  }
+  const uword state_offset = ClassHeapStats::state_offset();
+  const Address& state_address = Address(temp_reg, state_offset);
+  ldr(temp_reg, state_address);
+  tsti(temp_reg, Immediate(ClassHeapStats::TraceAllocationMask()));
+  b(trace, NE);
+}
+
+
 void Assembler::TryAllocate(const Class& cls,
                             Label* failure,
                             Register instance_reg,
@@ -1340,6 +1354,10 @@ void Assembler::TryAllocate(const Class& cls,
                             Register pp) {
   ASSERT(failure != NULL);
   if (FLAG_inline_alloc) {
+    // If this allocation is traced, program will jump to failure path
+    // (i.e. the allocation stub) which will allocate the object and trace the
+    // allocation call site.
+    MaybeTraceAllocation(cls.id(), temp_reg, pp, failure);
     const intptr_t instance_size = cls.instance_size();
     Heap* heap = Isolate::Current()->heap();
     Heap::Space space = heap->SpaceForAllocation(cls.id());
@@ -1387,6 +1405,10 @@ void Assembler::TryAllocateArray(intptr_t cid,
                                  Register temp1,
                                  Register temp2) {
   if (FLAG_inline_alloc) {
+    // If this allocation is traced, program will jump to failure path
+    // (i.e. the allocation stub) which will allocate the object and trace the
+    // allocation call site.
+    MaybeTraceAllocation(cid, temp1, PP, failure);
     Isolate* isolate = Isolate::Current();
     Heap* heap = isolate->heap();
     Heap::Space space = heap->SpaceForAllocation(cid);

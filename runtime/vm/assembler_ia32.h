@@ -742,8 +742,8 @@ class Assembler : public ValueObject {
 
   void CompareClassId(Register object, intptr_t class_id, Register scratch);
 
-  void LoadTaggedClassIdMayBeSmi(Register result,
-                                 Register object);
+  void LoadClassIdMayBeSmi(Register result, Register object);
+  void LoadTaggedClassIdMayBeSmi(Register result, Register object);
 
   void SmiUntagOrCheckClass(Register object,
                             intptr_t class_id,
@@ -870,6 +870,13 @@ class Assembler : public ValueObject {
   static intptr_t EntryPointToPcMarkerOffset() {
     return kEntryPointToPcMarkerOffset;
   }
+
+  // If allocation tracing for |cid| is enabled, will jump to |trace| label,
+  // which will allocate in the runtime where tracing occurs.
+  void MaybeTraceAllocation(intptr_t cid,
+                            Register temp_reg,
+                            Label* trace,
+                            bool near_jump);
 
   void UpdateAllocationStats(intptr_t cid,
                              Register temp_reg,

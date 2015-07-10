@@ -456,7 +456,15 @@ void Assembler::SubuDetectOverflow(Register rd, Register rs, Register rt,
 }
 
 
-void Assembler::LoadObject(Register rd, const Object& object) {
+void Assembler::LoadObjectHelper(Register rd,
+                                 const Object& object,
+                                 bool is_unique) {
+  // Load common VM constants from the thread. This works also in places where
+  // no constant pool is set up (e.g. intrinsic code).
+  if (Thread::CanLoadFromThread(object)) {
+    lw(rd, Address(THR, Thread::OffsetFromThread(object)));
+    return;
+  }
   ASSERT(!in_delay_slot_);
   // Smis and VM heap objects are never relocated; do not use object pool.
   if (object.IsSmi()) {
@@ -471,10 +479,21 @@ void Assembler::LoadObject(Register rd, const Object& object) {
   } else {
     // Make sure that class CallPattern is able to decode this load from the
     // object pool.
-    const int32_t offset =
-        ObjectPool::element_offset(object_pool_wrapper_.FindObject(object));
+    const int32_t offset = ObjectPool::element_offset(
+        is_unique ? object_pool_wrapper_.AddObject(object)
+                  : object_pool_wrapper_.FindObject(object));
     LoadWordFromPoolOffset(rd, offset - kHeapObjectTag);
   }
+}
+
+
+void Assembler::LoadObject(Register rd, const Object& object) {
+  LoadObjectHelper(rd, object, false);
+}
+
+
+void Assembler::LoadUniqueObject(Register rd, const Object& object) {
+  LoadObjectHelper(rd, object, true);
 }
 
 
@@ -555,8 +574,8 @@ void Assembler::StoreIntoObject(Register object,
   if (object != T0) {
     mov(T0, object);
   }
-  StubCode* stub_code = Isolate::Current()->stub_code();
-  BranchLink(&stub_code->UpdateStoreBufferLabel());
+  lw(T9, Address(THR, Thread::update_store_buffer_entry_point_offset()));
+  jalr(T9);
   lw(RA, Address(SP, 0 * kWordSize));
   if (value != T0) {
     // Restore T0.
@@ -667,7 +686,7 @@ void Assembler::LoadClass(Register result, Register object) {
 }
 
 
-void Assembler::LoadTaggedClassIdMayBeSmi(Register result, Register object) {
+void Assembler::LoadClassIdMayBeSmi(Register result, Register object) {
   static const intptr_t kSmiCidSource = kSmiCid << RawObject::kClassIdTagPos;
 
   LoadImmediate(TMP, reinterpret_cast<int32_t>(&kSmiCidSource) + 1);
@@ -677,6 +696,11 @@ void Assembler::LoadTaggedClassIdMayBeSmi(Register result, Register object) {
   }
   movz(result, TMP, CMPRES1);
   LoadClassId(result, result);
+}
+
+
+void Assembler::LoadTaggedClassIdMayBeSmi(Register result, Register object) {
+  LoadClassIdMayBeSmi(result, object);
   SmiTag(result);
 }
 
@@ -866,6 +890,33 @@ void Assembler::UpdateAllocationStatsWithSize(intptr_t cid,
 }
 
 
+void Assembler::MaybeTraceAllocation(intptr_t cid,
+                                     Register temp_reg,
+                                     Label* trace) {
+  ASSERT(cid > 0);
+  ASSERT(!in_delay_slot_);
+  ASSERT(temp_reg != kNoRegister);
+  ASSERT(temp_reg != TMP);
+  Isolate* isolate = Isolate::Current();
+  ClassTable* class_table = isolate->class_table();
+  const uword class_offset = cid * sizeof(ClassHeapStats);  // NOLINT
+  if (cid < kNumPredefinedCids) {
+    const uword class_heap_stats_table_address =
+        class_table->PredefinedClassHeapStatsTableAddress();
+    LoadImmediate(temp_reg, class_heap_stats_table_address + class_offset);
+  } else {
+    LoadImmediate(temp_reg, class_table->ClassStatsTableAddress());
+    lw(temp_reg, Address(temp_reg, 0));
+    AddImmediate(temp_reg, class_offset);
+  }
+  const uword state_offset = ClassHeapStats::state_offset();
+  const Address& state_address = Address(temp_reg, state_offset);
+  lw(temp_reg, state_address);
+  andi(CMPRES1, temp_reg, Immediate(ClassHeapStats::TraceAllocationMask()));
+  bne(CMPRES1, ZR, trace);
+}
+
+
 void Assembler::TryAllocate(const Class& cls,
                             Label* failure,
                             Register instance_reg,
@@ -873,6 +924,10 @@ void Assembler::TryAllocate(const Class& cls,
   ASSERT(!in_delay_slot_);
   ASSERT(failure != NULL);
   if (FLAG_inline_alloc) {
+    // If this allocation is traced, program will jump to failure path
+    // (i.e. the allocation stub) which will allocate the object and trace the
+    // allocation call site.
+    MaybeTraceAllocation(cls.id(), temp_reg, failure);
     const intptr_t instance_size = cls.instance_size();
     Heap* heap = Isolate::Current()->heap();
     Heap::Space space = heap->SpaceForAllocation(cls.id());
@@ -916,6 +971,10 @@ void Assembler::TryAllocateArray(intptr_t cid,
                                  Register temp1,
                                  Register temp2) {
   if (FLAG_inline_alloc) {
+    // If this allocation is traced, program will jump to failure path
+    // (i.e. the allocation stub) which will allocate the object and trace the
+    // allocation call site.
+    MaybeTraceAllocation(cid, temp1, failure);
     Isolate* isolate = Isolate::Current();
     Heap* heap = isolate->heap();
     Heap::Space space = heap->SpaceForAllocation(cid);

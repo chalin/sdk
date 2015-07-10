@@ -20,7 +20,7 @@ import '../../types/types.dart' show TypeMask, UnionTypeMask, FlatTypeMask,
     ForwardingTypeMask;
 import '../../elements/elements.dart';
 import '../../js/js.dart' as js;
-import '../../io/source_information.dart' show SourceInformationFactory;
+import '../../io/source_information.dart' show SourceInformationStrategy;
 import '../../tree_ir/tree_ir_builder.dart' as tree_builder;
 import '../../cps_ir/optimizers.dart';
 import '../../cps_ir/optimizers.dart' as cps_opt;
@@ -36,7 +36,7 @@ class CpsFunctionCompiler implements FunctionCompiler {
   final ConstantSystem constantSystem;
   final Compiler compiler;
   final Glue glue;
-  final SourceInformationFactory sourceInformationFactory;
+  final SourceInformationStrategy sourceInformationFactory;
 
   // TODO(karlklose,sigurm): remove and update dart-doc of [compile].
   final FunctionCompiler fallbackCompiler;
@@ -46,7 +46,7 @@ class CpsFunctionCompiler implements FunctionCompiler {
   IrBuilderTask get irBuilderTask => compiler.irBuilder;
 
   CpsFunctionCompiler(Compiler compiler, JavaScriptBackend backend,
-                      SourceInformationFactory sourceInformationFactory)
+                      SourceInformationStrategy sourceInformationFactory)
       : fallbackCompiler =
             new ssa.SsaFunctionCompiler(backend, sourceInformationFactory),
         this.sourceInformationFactory = sourceInformationFactory,
@@ -181,9 +181,12 @@ class CpsFunctionCompiler implements FunctionCompiler {
       assert(checkCpsIntegrity(cpsNode));
     }
 
+    applyCpsPass(new RedundantPhiEliminator());
     TypePropagator typePropagator = new TypePropagator(compiler);
     applyCpsPass(typePropagator);
     dumpTypedIR(cpsNode, typePropagator);
+    applyCpsPass(new ShrinkingReducer());
+    applyCpsPass(new RedundantJoinEliminator());
     applyCpsPass(new RedundantPhiEliminator());
     applyCpsPass(new ShrinkingReducer());
 
@@ -234,7 +237,7 @@ class CpsFunctionCompiler implements FunctionCompiler {
 
   js.Node attachPosition(js.Node node, AstElement element) {
     return node.withSourceInformation(
-        sourceInformationFactory.forContext(element)
+        sourceInformationFactory.createBuilderForContext(element)
             .buildDeclaration(element));
   }
 }

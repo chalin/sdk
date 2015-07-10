@@ -678,6 +678,7 @@ class AnalysisContextImpl implements InternalAnalysisContext {
       }
     }
     _pendingFutureTargets.clear();
+    _privatePartition.dispose();
   }
 
   @override
@@ -954,7 +955,7 @@ class AnalysisContextImpl implements InternalAnalysisContext {
     }
     bool changed = newContents != originalContents;
     if (newContents != null) {
-      if (newContents != originalContents) {
+      if (changed) {
         if (!analysisOptions.incremental ||
             !_tryPoorMansIncrementalResolution(source, newContents)) {
           _sourceChanged(source);
@@ -965,22 +966,24 @@ class AnalysisContextImpl implements InternalAnalysisContext {
         entry.modificationTime = _contentCache.getModificationStamp(source);
       }
     } else if (originalContents != null) {
-      changed = newContents != originalContents;
       // We are removing the overlay for the file, check if the file's
       // contents is the same as it was in the overlay.
       try {
         TimestampedData<String> fileContents = getContents(source);
-        String fileContentsData = fileContents.data;
-        if (fileContentsData == originalContents) {
-          entry.setValue(CONTENT, fileContentsData, TargetedResult.EMPTY_LIST);
-          entry.modificationTime = fileContents.modificationTime;
+        newContents = fileContents.data;
+        entry.modificationTime = fileContents.modificationTime;
+        if (newContents == originalContents) {
+          entry.setValue(CONTENT, newContents, TargetedResult.EMPTY_LIST);
           changed = false;
         }
       } catch (e) {}
       // If not the same content (e.g. the file is being closed without save),
       // then force analysis.
       if (changed) {
-        _sourceChanged(source);
+        if (!analysisOptions.incremental ||
+            !_tryPoorMansIncrementalResolution(source, newContents)) {
+          _sourceChanged(source);
+        }
       }
     }
     if (notify && changed) {
@@ -1094,7 +1097,6 @@ class AnalysisContextImpl implements InternalAnalysisContext {
       setValue(LIBRARY_ELEMENT3, library);
       setValue(LIBRARY_ELEMENT4, library);
       setValue(LIBRARY_ELEMENT5, library);
-      setValue(LIBRARY_ELEMENT6, library);
       setValue(LINE_INFO, new LineInfo(<int>[0]));
       setValue(PARSE_ERRORS, AnalysisError.NO_ERRORS);
       entry.setState(PARSED_UNIT, CacheState.FLUSHED);
@@ -1247,6 +1249,7 @@ class AnalysisContextImpl implements InternalAnalysisContext {
     return changedSources.length > 0;
   }
 
+  @deprecated
   @override
   void visitCacheItems(void callback(Source source, SourceEntry dartEntry,
       DataDescriptor rowDesc, CacheState state)) {
@@ -1312,9 +1315,7 @@ class AnalysisContextImpl implements InternalAnalysisContext {
 //    }
   }
 
-  /**
-   * Visit all entries of the content cache.
-   */
+  @override
   void visitContentCache(ContentCacheVisitor visitor) {
     _contentCache.accept(visitor);
   }
@@ -1719,8 +1720,8 @@ class AnalysisContextImpl implements InternalAnalysisContext {
               dartDelta.hasDirectiveChange = unitDelta.hasDirectiveChange;
               unitDelta.addedDeclarations.forEach(dartDelta.elementAdded);
               unitDelta.removedDeclarations.forEach(dartDelta.elementRemoved);
-              print(
-                  'dartDelta: add=${dartDelta.addedNames} remove=${dartDelta.removedNames}');
+//              print(
+//                  'dartDelta: add=${dartDelta.addedNames} remove=${dartDelta.removedNames}');
               delta = dartDelta;
               entry.setState(CONTENT, CacheState.INVALID, delta: delta);
               return;
@@ -1779,9 +1780,6 @@ class AnalysisContextImpl implements InternalAnalysisContext {
    * TODO(scheglov) A hackish, limited incremental resolution implementation.
    */
   bool _tryPoorMansIncrementalResolution(Source unitSource, String newCode) {
-    if (AnalysisEngine.instance.limitInvalidationInTaskModel) {
-      return false;
-    }
     return PerformanceStatistics.incrementalAnalysis.makeCurrentWhile(() {
       incrementalResolutionValidation_lastUnitSource = null;
       incrementalResolutionValidation_lastLibrarySource = null;

@@ -21,6 +21,11 @@ namespace dart {
   V(Object_noSuchMethod, 6)                                                    \
   V(Object_runtimeType, 1)                                                     \
   V(Object_instanceOf, 5)                                                      \
+  V(Object_instanceOfNum, 2)                                                   \
+  V(Object_instanceOfInt, 2)                                                   \
+  V(Object_instanceOfSmi, 2)                                                   \
+  V(Object_instanceOfDouble, 2)                                                \
+  V(Object_instanceOfString, 2)                                                \
   V(Object_as, 4)                                                              \
   V(Function_apply, 2)                                                         \
   V(FunctionImpl_equals, 2)                                                    \
@@ -375,6 +380,7 @@ namespace dart {
   V(LibraryPrefix_load, 1)                                                     \
   V(LibraryPrefix_invalidateDependentCode, 1)                                  \
   V(LibraryPrefix_loadError, 1)                                                \
+  V(LibraryPrefix_isLoaded, 1)                                                 \
   V(UserTag_new, 2)                                                            \
   V(UserTag_label, 1)                                                          \
   V(UserTag_defaultTag, 0)                                                     \

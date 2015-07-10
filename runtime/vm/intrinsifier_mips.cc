@@ -17,6 +17,8 @@
 
 namespace dart {
 
+DECLARE_FLAG(bool, interpret_irregexp);
+
 // When entering intrinsics code:
 // S5: IC Data
 // S4: Arguments descriptor
@@ -177,6 +179,7 @@ void Intrinsifier::GrowableArray_add(Assembler* assembler) {
 #define TYPED_ARRAY_ALLOCATION(type_name, cid, max_len, scale_shift)           \
   Label fall_through;                                                          \
   const intptr_t kArrayLengthStackOffset = 0 * kWordSize;                      \
+  __ MaybeTraceAllocation(cid, T2, &fall_through);                             \
   __ lw(T2, Address(SP, kArrayLengthStackOffset));  /* Array length. */        \
   /* Check that length is a positive Smi. */                                   \
   /* T2: requested array length argument. */                                   \
@@ -1675,6 +1678,28 @@ void Intrinsifier::ObjectEquals(Assembler* assembler) {
 }
 
 
+// Return type quickly for simple types (not parameterized and not signature).
+void Intrinsifier::ObjectRuntimeType(Assembler* assembler) {
+  Label fall_through;
+  __ lw(T0, Address(SP, 0 * kWordSize));
+  __ LoadClassIdMayBeSmi(T1, T0);
+  __ LoadClassById(T2, T1);
+  // T2: class of instance (T0).
+
+  __ lw(T1, FieldAddress(T2, Class::signature_function_offset()));
+  __ BranchNotEqual(T1, Object::null_object(), &fall_through);
+
+  __ lhu(T1, FieldAddress(T2, Class::num_type_arguments_offset()));
+  __ BranchNotEqual(T1, Immediate(0), &fall_through);
+
+  __ lw(V0, FieldAddress(T2, Class::canonical_types_offset()));
+  __ BranchEqual(V0, Object::null_object(), &fall_through);
+  __ Ret();
+
+  __ Bind(&fall_through);
+}
+
+
 void Intrinsifier::String_getHashCode(Assembler* assembler) {
   Label fall_through;
   __ lw(T0, Address(SP, 0 * kWordSize));
@@ -2075,6 +2100,8 @@ void Intrinsifier::TwoByteString_equality(Assembler* assembler) {
 
 
 void Intrinsifier::JSRegExp_ExecuteMatch(Assembler* assembler) {
+  if (FLAG_interpret_irregexp) return;
+
   static const intptr_t kRegExpParamOffset = 2 * kWordSize;
   static const intptr_t kStringParamOffset = 1 * kWordSize;
   // start_index smi is located at 0.

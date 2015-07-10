@@ -439,7 +439,9 @@ Dart_Isolate Api::CastIsolate(Isolate* isolate) {
 
 
 Dart_Handle Api::NewError(const char* format, ...) {
-  Isolate* isolate = Isolate::Current();
+  Thread* thread = Thread::Current();
+  Isolate* isolate = thread->isolate();
+  Zone* zone = thread->zone();
   DARTSCOPE(isolate);
   CHECK_CALLBACK_STATE(isolate);
 
@@ -448,13 +450,13 @@ Dart_Handle Api::NewError(const char* format, ...) {
   intptr_t len = OS::VSNPrint(NULL, 0, format, args);
   va_end(args);
 
-  char* buffer = isolate->current_zone()->Alloc<char>(len + 1);
+  char* buffer = zone->Alloc<char>(len + 1);
   va_list args2;
   va_start(args2, format);
   OS::VSNPrint(buffer, (len + 1), format, args2);
   va_end(args2);
 
-  const String& message = String::Handle(isolate, String::New(buffer));
+  const String& message = String::Handle(zone, String::New(buffer));
   return Api::NewHandle(isolate, ApiError::New(message));
 }
 
@@ -1522,7 +1524,7 @@ DART_EXPORT Dart_Handle Dart_CreateSnapshot(
   isolate->heap()->CollectAllGarbage();
 #if defined(DEBUG)
   FunctionVisitor check_canonical(isolate);
-  isolate->heap()->VisitObjects(&check_canonical);
+  isolate->heap()->IterateObjects(&check_canonical);
 #endif  // #if defined(DEBUG).
 
   // Since this is only a snapshot the root library should not be set.

@@ -24,6 +24,7 @@ void main() {
   runReflectiveTests(NullityBasicAnnotationTestGroup);
   runReflectiveTests(NullLiteralTestGroup);
   runReflectiveTests(MainTestGroup);
+  runReflectiveTests(AssignabilityTestGroup);
   runReflectiveTests(UnionTypeMemberTestGroup);
   runReflectiveTests(MemberLookupTestGroup);
   runReflectiveTests(TypedefTestGroup);
@@ -40,6 +41,7 @@ void main() {
   runReflectiveTests(InitLocalVarTestGroup);
   runReflectiveTests(InitFieldTestGroup);
   runReflectiveTests(InitLibraryVarTestGroup);
+  runReflectiveTests(VoidFuncAndNullFuncTestGroup);
   runReflectiveTests(MiscOver$NullTests);
 }
 
@@ -602,7 +604,7 @@ class NullableByDefaultAndOtherAnnoTestGroup extends NullityStaticTypeAnalyzerSu
     String code = '''
       var x = ((int i) => i)("");
     ''';
-    var err = [StaticTypeWarningCode.INVALID_ASSIGNMENT];
+    // var err = [StaticTypeWarningCode.INVALID_ASSIGNMENT];
     _resolveTestUnit(code);
     expectType('((int i) => i)', FunctionTypeImpl, '(int) → int');
   }
@@ -632,8 +634,6 @@ class NullableByDefaultAndOtherAnnoTestGroup extends NullityStaticTypeAnalyzerSu
 class NullLiteralTestGroup extends NullityTestSupertype {
 
   void test_methods_on_null() {
-    //if (!isNNBD) return; // because null.toString() doesn't resolve for some reason
-    // probably because the 
     Source source = addSource('''main() {
       1.toString();
       "".toString();
@@ -642,9 +642,6 @@ class NullLiteralTestGroup extends NullityTestSupertype {
       }''');
     resolveAndAssert(source);
     if (isDEP30) verify([source]);
-    // if !isNNBD, then don't verify since, e.g., hashCode will not have been resolved
-    // because `null` will have been \bot, and hence no resolution happens on method
-    // call or field access.
   }
 
   void test_cannot_call_1() {
@@ -672,6 +669,7 @@ class NullLiteralTestGroup extends NullityTestSupertype {
     if (isDEP30) verify([source]);
   }
 
+  // Also see [VoidFuncAndNullFuncTestGroup].
   void test_null_return_for_void_func_ok() {
     Source source = addSource('void m() { return null; }');
     resolveAndVerify(source);
@@ -696,9 +694,17 @@ class NullLiteralTestGroup extends NullityTestSupertype {
 @reflectiveTest
 class MainTestGroup extends NullityTestSupertype {
   
-  void test_non_null_init_null_warning_basic() {
+  void test_basic_non_null_init_null_warning() {
     Source source = addSource('int i = null;');
     resolveAndVerifyErrDEP30(source, [StaticTypeWarningCode.INVALID_ASSIGNMENT]);
+  }
+  
+  void test_basic_cannot_asgn_nullable_int_to_nullable_String() {
+    Source source = addSource('''
+      @nullable int i;
+      @nullable String s = i;
+    ''');
+    resolveAndVerify(source, [StaticTypeWarningCode.INVALID_ASSIGNMENT]);
   }
 
   void _test_null_assigned_to_lib_var(String anno) {
@@ -1046,6 +1052,37 @@ class MainTestGroup extends NullityTestSupertype {
   void test_method_and_get_decl_nullable3() =>  _test_method_and_get_decl3(nullableAnno);
 
 }
+
+
+@reflectiveTest
+class AssignabilityTestGroup extends NullityTestSupertype {
+
+  void test_assignability_sanity() {
+    Source source = addSource('''
+      num n = 1.0;
+      int o = n;
+    ''');
+    resolveAndVerify(source);
+  }
+
+  void test_assignability_should_be_ok() {
+    Source source = addSource('''
+      num n = 1.0;
+      /*?*/int o = n; // should be ok
+    ''');
+    resolveAndVerify(source);
+  }
+
+  // Also see test_assignability_to_field_of_type_parameter_ok.
+  void test_assignability_to_field_of_type_parameter_ok() {
+    Source source = addSource('''
+      class C2<T extends int> { /*?*/T o2 = 1; }
+    ''');
+    resolveAndVerify(source);
+  }
+
+}
+
 
 @reflectiveTest
 class TypedefTestGroup extends NullityTestSupertype {
@@ -2062,6 +2099,19 @@ class GenericsTestGroup extends NullityTestSupertype {
     resolveAndVerify(source);
   }
 
+  void test_assignability_to_field_of_type_parameter_ok_alt() {
+    Source source = addSource('''
+      num n = 1.0;
+      /*?*/int o = n; // ok
+      class C<T extends int> {
+        T o1 = n; // ok
+        @nullable T o2 = n; // should be ok
+        @nullable T o22 = null;
+      }
+    ''');
+    resolveAndVerify(source);
+  }
+
   void test_assignability_to_field_of_type_parameter_ok2() {
     Source source = addSource('''
       @nullable Object o = 0;
@@ -2982,6 +3032,38 @@ class LibTestGroup extends NullityTestSupertype {
     resolveAndVerify(source, [StaticTypeWarningCode.INVALID_ASSIGNMENT], !isDEP30);
   }
   
+}
+
+
+@reflectiveTest
+class VoidFuncAndNullFuncTestGroup extends NullityTestSupertype {
+
+  // See also [NullLiteralTestGroup.test_null_return_for_void_func_ok].
+  void test_null_return_for_void_func_ok() {
+    Source source = addSource('void m() { return null; }');
+    resolveAndVerify(source);
+  }
+
+  void test_nullable_return_for_void_func_err() {
+    Source source = addSource('void m(/*?*/int i) { return i; }');
+    resolveAndVerify(source, [StaticTypeWarningCode.RETURN_OF_INVALID_TYPE]);
+  }
+
+  void test_nullable_return_for_Null_func_ok() {
+    Source source = addSource('Null m(/*?*/int i) { return i; }');
+    resolveAndVerify(source, [StaticTypeWarningCode.RETURN_OF_INVALID_TYPE], !isDEP30);
+  }
+
+  void test_nullable_return_for_base_type_func_ok() {
+    Source source = addSource('int m(/*?*/int i) { return i; }');
+    resolveAndVerify(source);
+  }
+
+  void test_null_return_for_Null_func_ok() {
+    Source source = addSource('Null m() { return null; }');
+    resolveAndVerify(source);
+  }
+
 }
 
 

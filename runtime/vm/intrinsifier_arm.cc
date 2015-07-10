@@ -18,6 +18,8 @@
 
 namespace dart {
 
+DECLARE_FLAG(bool, interpret_irregexp);
+
 // When entering intrinsics code:
 // R5: IC Data
 // R4: Arguments descriptor
@@ -187,6 +189,7 @@ void Intrinsifier::GrowableArray_add(Assembler* assembler) {
 #define TYPED_ARRAY_ALLOCATION(type_name, cid, max_len, scale_shift)           \
   Label fall_through;                                                          \
   const intptr_t kArrayLengthStackOffset = 0 * kWordSize;                      \
+  __ MaybeTraceAllocation(cid, R2, &fall_through);                             \
   __ ldr(R2, Address(SP, kArrayLengthStackOffset));  /* Array length. */       \
   /* Check that length is a positive Smi. */                                   \
   /* R2: requested array length argument. */                                   \
@@ -223,7 +226,7 @@ void Intrinsifier::GrowableArray_add(Assembler* assembler) {
                                                                                \
   /* Successfully allocated the object(s), now update top to point to */       \
   /* next object start and initialize the object. */                           \
-  __ LoadAllocationStatsAddress(R4, cid, space);                               \
+  __ LoadAllocationStatsAddress(R4, cid);                                      \
   __ LoadImmediate(R3, heap->TopAddress(space));                               \
   __ str(R1, Address(R3, 0));                                                  \
   __ AddImmediate(R0, kHeapObjectTag);                                         \
@@ -1570,6 +1573,35 @@ void Intrinsifier::ObjectEquals(Assembler* assembler) {
 }
 
 
+// Return type quickly for simple types (not parameterized and not signature).
+void Intrinsifier::ObjectRuntimeType(Assembler* assembler) {
+  Label fall_through;
+  static const intptr_t kSmiCidSource = kSmiCid << RawObject::kClassIdTagPos;
+  __ ldr(R0, Address(SP, 0 * kWordSize));
+
+  __ LoadImmediate(TMP, reinterpret_cast<int32_t>(&kSmiCidSource) + 1);
+  __ tst(R0, Operand(kSmiTagMask));
+  __ mov(TMP, Operand(R0), NE);
+  __ LoadClassId(R1, TMP);
+  __ LoadClassById(R2, R1);
+  // R2: class of instance (R0).
+  __ ldr(R3, FieldAddress(R2, Class::signature_function_offset()));
+  __ CompareImmediate(R3, reinterpret_cast<int32_t>(Object::null()));
+  __ b(&fall_through, NE);
+
+  __ ldrh(R3, FieldAddress(R2, Class::num_type_arguments_offset()));
+  __ CompareImmediate(R3, 0);
+  __ b(&fall_through, NE);
+
+  __ ldr(R0, FieldAddress(R2, Class::canonical_types_offset()));
+  __ CompareImmediate(R0, reinterpret_cast<int32_t>(Object::null()));
+  __ b(&fall_through, EQ);
+  __ Ret();
+
+  __ Bind(&fall_through);
+}
+
+
 void Intrinsifier::String_getHashCode(Assembler* assembler) {
   __ ldr(R0, Address(SP, 0 * kWordSize));
   __ ldr(R0, FieldAddress(R0, String::hash_offset()));
@@ -1762,7 +1794,7 @@ static void TryAllocateOnebyteString(Assembler* assembler,
 
   // Successfully allocated the object(s), now update top to point to
   // next object start and initialize the object.
-  __ LoadAllocationStatsAddress(R4, cid, space);
+  __ LoadAllocationStatsAddress(R4, cid);
   __ str(R1, Address(R3, 0));
   __ AddImmediate(R0, kHeapObjectTag);
 
@@ -1962,6 +1994,8 @@ void Intrinsifier::TwoByteString_equality(Assembler* assembler) {
 
 
 void Intrinsifier::JSRegExp_ExecuteMatch(Assembler* assembler) {
+  if (FLAG_interpret_irregexp) return;
+
   static const intptr_t kRegExpParamOffset = 2 * kWordSize;
   static const intptr_t kStringParamOffset = 1 * kWordSize;
   // start_index smi is located at offset 0.

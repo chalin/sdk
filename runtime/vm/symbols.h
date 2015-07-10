@@ -66,6 +66,7 @@ class ObjectPointerVisitor;
   V(NoSuchMethodError, "NoSuchMethodError")                                    \
   V(CyclicInitializationError, "CyclicInitializationError")                    \
   V(ThrowNew, "_throwNew")                                                     \
+  V(ThrowNewIfNotLoaded, "_throwNewIfNotLoaded")                               \
   V(Symbol, "Symbol")                                                          \
   V(SymbolCtor, "Symbol.")                                                     \
   V(List, "List")                                                              \
@@ -311,6 +312,11 @@ class ObjectPointerVisitor;
   V(TwoNewlines, "\n\n")                                                       \
   V(TwoSpaces, "  ")                                                           \
   V(_instanceOf, "_instanceOf")                                                \
+  V(_instanceOfSmi, "_instanceOfSmi")                                          \
+  V(_instanceOfNum, "_instanceOfNum")                                          \
+  V(_instanceOfInt, "_instanceOfInt")                                          \
+  V(_instanceOfDouble, "_instanceOfDouble")                                    \
+  V(_instanceOfString, "_instanceOfString")                                    \
   V(_as, "_as")                                                                \
   V(GetterPrefix, "get:")                                                      \
   V(SetterPrefix, "set:")                                                      \

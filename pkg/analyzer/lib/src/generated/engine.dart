@@ -20,7 +20,6 @@ import 'package:analyzer/src/plugin/engine_plugin.dart';
 import 'package:analyzer/src/plugin/options_plugin.dart';
 import 'package:analyzer/src/services/lint.dart';
 import 'package:analyzer/src/task/manager.dart';
-import 'package:analyzer/src/task/task_dart.dart';
 import 'package:analyzer/task/dart.dart';
 import 'package:analyzer/task/model.dart';
 import 'package:html/dom.dart' show Document;
@@ -2173,7 +2172,7 @@ class AnalysisContextImpl implements InternalAnalysisContext {
     }
     bool changed = newContents != originalContents;
     if (newContents != null) {
-      if (newContents != originalContents) {
+      if (changed) {
         _incrementalAnalysisCache =
             IncrementalAnalysisCache.clear(_incrementalAnalysisCache, source);
         if (!analysisOptions.incremental ||
@@ -2190,22 +2189,24 @@ class AnalysisContextImpl implements InternalAnalysisContext {
     } else if (originalContents != null) {
       _incrementalAnalysisCache =
           IncrementalAnalysisCache.clear(_incrementalAnalysisCache, source);
-      changed = newContents != originalContents;
       // We are removing the overlay for the file, check if the file's
       // contents is the same as it was in the overlay.
       try {
         TimestampedData<String> fileContents = getContents(source);
-        String fileContentsData = fileContents.data;
-        if (fileContentsData == originalContents) {
-          sourceEntry.setValue(SourceEntry.CONTENT, fileContentsData);
-          sourceEntry.modificationTime = fileContents.modificationTime;
+        newContents = fileContents.data;
+        sourceEntry.modificationTime = fileContents.modificationTime;
+        if (newContents == originalContents) {
+          sourceEntry.setValue(SourceEntry.CONTENT, newContents);
           changed = false;
         }
       } catch (e) {}
       // If not the same content (e.g. the file is being closed without save),
       // then force analysis.
       if (changed) {
-        _sourceChanged(source);
+        if (!analysisOptions.incremental ||
+            !_tryPoorMansIncrementalResolution(source, newContents)) {
+          _sourceChanged(source);
+        }
       }
     }
     if (notify && changed) {
@@ -2225,13 +2226,18 @@ class AnalysisContextImpl implements InternalAnalysisContext {
     // Prepare sources to invalidate hints in.
     List<Source> sources = <Source>[librarySource];
     sources.addAll(dartEntry.getValue(DartEntry.INCLUDED_PARTS));
-    // Invalidate hints.
+    // Invalidate hints and lints.
     for (Source source in sources) {
       DartEntry dartEntry = _cache.get(source);
       if (dartEntry.getStateInLibrary(DartEntry.HINTS, librarySource) ==
           CacheState.VALID) {
         dartEntry.setStateInLibrary(
             DartEntry.HINTS, librarySource, CacheState.INVALID);
+      }
+      if (dartEntry.getStateInLibrary(DartEntry.LINTS, librarySource) ==
+          CacheState.VALID) {
+        dartEntry.setStateInLibrary(
+            DartEntry.LINTS, librarySource, CacheState.INVALID);
       }
     }
   }
@@ -2641,6 +2647,7 @@ class AnalysisContextImpl implements InternalAnalysisContext {
     return changedSources.length > 0;
   }
 
+  @deprecated
   @override
   void visitCacheItems(void callback(Source source, SourceEntry dartEntry,
       DataDescriptor rowDesc, CacheState state)) {
@@ -2704,9 +2711,7 @@ class AnalysisContextImpl implements InternalAnalysisContext {
     }
   }
 
-  /**
-   * Visit all entries of the content cache.
-   */
+  @override
   void visitContentCache(ContentCacheVisitor visitor) {
     _contentCache.accept(visitor);
   }
@@ -4250,28 +4255,6 @@ class AnalysisContextImpl implements InternalAnalysisContext {
   }
 
   /**
-   * Record the results produced by performing a [task] and return the cache
-   * entry associated with the results.
-   */
-  DartEntry _recordBuildUnitElementTask(BuildUnitElementTask task) {
-    Source source = task.source;
-    Source library = task.library;
-    DartEntry dartEntry = _cache.get(source);
-    CaughtException thrownException = task.exception;
-    if (thrownException != null) {
-      dartEntry.recordBuildElementErrorInLibrary(library, thrownException);
-      throw new AnalysisException('<rethrow>', thrownException);
-    }
-    dartEntry.setValueInLibrary(DartEntry.BUILT_UNIT, library, task.unit);
-    dartEntry.setValueInLibrary(
-        DartEntry.BUILT_ELEMENT, library, task.unitElement);
-    ChangeNoticeImpl notice = getNotice(source);
-    LineInfo lineInfo = dartEntry.getValue(SourceEntry.LINE_INFO);
-    notice.setErrors(dartEntry.allErrors, lineInfo);
-    return dartEntry;
-  }
-
-  /**
    * Given a [dartEntry] and a [library] element, record the library element and
    * other information gleaned from the element in the cache entry.
    */
@@ -4841,10 +4824,6 @@ class AnalysisContextImpl_AnalysisTaskResultRecorder
   final AnalysisContextImpl AnalysisContextImpl_this;
 
   AnalysisContextImpl_AnalysisTaskResultRecorder(this.AnalysisContextImpl_this);
-
-  @override
-  DartEntry visitBuildUnitElementTask(BuildUnitElementTask task) =>
-      AnalysisContextImpl_this._recordBuildUnitElementTask(task);
 
   @override
   DartEntry visitGenerateDartErrorsTask(GenerateDartErrorsTask task) =>
@@ -6556,12 +6535,6 @@ abstract class AnalysisTask {
  * appropriate method.
  */
 abstract class AnalysisTaskVisitor<E> {
-  /**
-   * Visit the given [task], returning the result of the visit. This method will
-   * throw an AnalysisException if the visitor throws an exception.
-   */
-  E visitBuildUnitElementTask(BuildUnitElementTask task);
-
   /**
    * Visit the given [task], returning the result of the visit. This method will
    * throw an AnalysisException if the visitor throws an exception.
@@ -9353,8 +9326,14 @@ abstract class InternalAnalysisContext implements AnalysisContext {
   /**
    * Call the given callback function for eache cache item in the context.
    */
+  @deprecated
   void visitCacheItems(void callback(Source source, SourceEntry dartEntry,
       DataDescriptor rowDesc, CacheState state));
+
+  /**
+   * Visit all entries of the content cache.
+   */
+  void visitContentCache(ContentCacheVisitor visitor);
 }
 
 /**
@@ -10772,7 +10751,7 @@ class ResolveDartUnitTask extends AnalysisTask {
     // Resolve the type names.
     //
     RecordingErrorListener errorListener = new RecordingErrorListener();
-    TypeResolverVisitor typeResolverVisitor = new TypeResolverVisitor.con2(
+    TypeResolverVisitor typeResolverVisitor = new TypeResolverVisitor(
         _libraryElement, source, typeProvider, errorListener);
     unit.accept(typeResolverVisitor);
     //
@@ -10780,8 +10759,9 @@ class ResolveDartUnitTask extends AnalysisTask {
     //
     InheritanceManager inheritanceManager =
         new InheritanceManager(_libraryElement);
-    ResolverVisitor resolverVisitor = new ResolverVisitor.con2(_libraryElement,
-        source, typeProvider, inheritanceManager, errorListener);
+    ResolverVisitor resolverVisitor = new ResolverVisitor(
+        _libraryElement, source, typeProvider, errorListener,
+        inheritanceManager: inheritanceManager);
     unit.accept(resolverVisitor);
     //
     // Perform additional error checking.

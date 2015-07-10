@@ -62,15 +62,14 @@ class EnginePlugin implements Plugin {
     //
     // Register Dart tasks.
     //
-    registerExtension(taskId, BuildClassConstructorsTask.DESCRIPTOR);
     registerExtension(taskId, BuildCompilationUnitElementTask.DESCRIPTOR);
     registerExtension(taskId, BuildDirectiveElementsTask.DESCRIPTOR);
     registerExtension(taskId, BuildEnumMemberElementsTask.DESCRIPTOR);
     registerExtension(taskId, BuildExportNamespaceTask.DESCRIPTOR);
-    registerExtension(taskId, BuildLibraryConstructorsTask.DESCRIPTOR);
     registerExtension(taskId, BuildLibraryElementTask.DESCRIPTOR);
     registerExtension(taskId, BuildPublicNamespaceTask.DESCRIPTOR);
-    registerExtension(taskId, BuildSourceClosuresTask.DESCRIPTOR);
+    registerExtension(taskId, BuildSourceExportClosureTask.DESCRIPTOR);
+    registerExtension(taskId, BuildSourceImportExportClosureTask.DESCRIPTOR);
     registerExtension(taskId, BuildTypeProviderTask.DESCRIPTOR);
     registerExtension(taskId, ComputeConstantDependenciesTask.DESCRIPTOR);
     registerExtension(taskId, ComputeConstantValueTask.DESCRIPTOR);

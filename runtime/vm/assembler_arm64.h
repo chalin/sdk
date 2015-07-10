@@ -1311,7 +1311,7 @@ class Assembler : public ValueObject {
   void LoadWordFromPoolOffset(Register dst, Register pp, uint32_t offset);
   void LoadWordFromPoolOffsetFixed(Register dst, Register pp, uint32_t offset);
   intptr_t FindImmediate(int64_t imm);
-  bool CanLoadObjectFromPool(const Object& object);
+  bool CanLoadFromObjectPool(const Object& object) const;
   bool CanLoadImmediateFromPool(int64_t imm, Register pp);
   void LoadExternalLabel(Register dst, const ExternalLabel* label,
                          Patchability patchable, Register pp);
@@ -1321,6 +1321,7 @@ class Assembler : public ValueObject {
                               Register pp);
   void LoadIsolate(Register dst, Register pp);
   void LoadObject(Register dst, const Object& obj, Register pp);
+  void LoadUniqueObject(Register dst, const Object& obj, Register pp);
   void LoadDecodableImmediate(Register reg, int64_t imm, Register pp);
   void LoadImmediateFixed(Register reg, int64_t imm);
   void LoadImmediate(Register reg, int64_t imm, Register pp);
@@ -1336,6 +1337,7 @@ class Assembler : public ValueObject {
   void LoadClassById(Register result, Register class_id, Register pp);
   void LoadClass(Register result, Register object, Register pp);
   void CompareClassId(Register object, intptr_t class_id, Register pp);
+  void LoadClassIdMayBeSmi(Register result, Register object);
   void LoadTaggedClassIdMayBeSmi(Register result, Register object);
 
   void ComputeRange(Register result,
@@ -1384,6 +1386,13 @@ class Assembler : public ValueObject {
                                      Register size_reg,
                                      Register pp,
                                      Heap::Space space);
+
+  // If allocation tracing for |cid| is enabled, will jump to |trace| label,
+  // which will allocate in the runtime where tracing occurs.
+  void MaybeTraceAllocation(intptr_t cid,
+                            Register temp_reg,
+                            Register pp,
+                            Label* trace);
 
   // Inlined allocation of an instance of class 'cls', code has no runtime
   // calls. Jump to 'failure' if the instance cannot be allocated here.
@@ -1442,6 +1451,11 @@ class Assembler : public ValueObject {
   GrowableArray<CodeComment*> comments_;
 
   bool allow_constant_pool_;
+
+  void LoadObjectHelper(Register dst,
+                        const Object& obj,
+                        Register pp,
+                        bool is_unique);
 
   void AddSubHelper(OperandSize os, bool set_flags, bool subtract,
                     Register rd, Register rn, Operand o) {
